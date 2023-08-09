@@ -16,7 +16,7 @@ type BTree struct {
 func NewBtree() *BTree {
 	return &BTree{
 		//控制btree叶子节点的数量
-		tree: btree.new(32),
+		tree: btree.New(32),
 		lock: new(sync.RWMutex),
 	}
 }
@@ -48,6 +48,7 @@ func (bt *BTree) Delete(key []byte) bool {
 	bt.lock.Lock()
 	//会获得删除前的元素，来检查要删除的元素原来是否存在
 	oldItem := bt.tree.Delete(it)
+	bt.lock.Unlock()
 	if oldItem == nil {
 		return false
 	}
