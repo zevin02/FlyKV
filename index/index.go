@@ -6,7 +6,7 @@ import (
 	"github.com/google/btree"
 )
 
-//Indexer 定义一个抽象索引接口，
+//Indexer 定义一个抽象索引接口(内存索引)
 //Get拿到索引的位置信息
 type Indexer interface {
 	//Put向索引中添加key对应的位置信息
@@ -15,6 +15,26 @@ type Indexer interface {
 	Get(key []byte) *data.LogRecordPos
 	//根据key在位置数据
 	Delete(key []byte) bool
+}
+type IndexType = int8
+
+const (
+	//Btree索引
+	Btree IndexType = itoa + 1
+	//ART自适应基数树
+	ART
+)
+
+//初始化类型索引
+func NewIndex(typ IndexType) Indexer {
+	switch typ {
+	case Btree:
+		return NewBtree()
+	case ART:
+		return nil
+	default:
+		panic("unsupported index type")
+	}
 }
 
 //BTree中使用到了Item的抽象方法,所以这里需要实现一个接口来实现相应的方法,插入到btree的时候实际上就是插入这个数据结构

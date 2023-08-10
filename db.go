@@ -3,6 +3,9 @@ package BitcaskDB
 import (
 	"BitcaskDB/data"
 	"BitcaskDB/index"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -12,7 +15,34 @@ type DB struct {
 	mu         *sync.RWMutex
 	activeFile *data.DataFile            //当前活跃文件，可以用来写入
 	olderFile  map[uint32]*data.DataFile //旧的数据文件，用来读取
-	index      index.Indexer
+	index      index.Indexer             //数据的内存索引
+}
+
+//打开bitcask存储引擎实例
+func Open(options Options) (*DB, error) {
+	//对用户传入的配置项进行校验
+	if err := checkOptions(options); err != nil {
+		return nil, err
+	}
+	//判断目录是否存在，不存在就需要进行创建目录
+	if _, err := os.Stat(options.DirPath); os.IsNotExist(err) {
+		//创建目录
+		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
+
+	//初始化DB的实例，并对数据结构进行初始化
+	db := &DB{
+		options:   options,
+		mu:        new(sync.RWMutex),
+		olderFile: make(map[uint32]*data.DataFile),
+		index:     index.NewIndex(options.IndexType),
+	}
+	//加载数据文件
+	if err := db.loadDataFiles(); err != nil {
+		return nil, err
+	}
 }
 
 func (db *DB) Put(key []byte, value []byte) error {
@@ -137,5 +167,58 @@ func (db *DB) setActiveDataFile() error {
 		return err
 	}
 	db.activeFile = dataFile
+	return nil
+}
+
+//对配置项进行校验
+func checkOptions(options Options) error {
+	if options.DirPath == "" {
+		return ErrDirIsInValid
+	}
+	if options.FileSize <= 0 {
+		return ErrFileSizeInValid
+	}
+	return nil
+}
+
+func (db *DB) loadDataFile() error {
+	//读目录读取出来，把该目录中的所有文件读取出来
+	dirEntries, err := os.ReadDir(db.options.DirPath)
+	if err != nil {
+		return err
+	}
+	var fileIds []int
+	//遍历目录中的所有文件,找到所有以.data结尾的文件
+	for _, entry := range dirEntries {
+		if strings.HasSuffix(entry.Name(), data.DataFileSuffix) {
+			//对00001.data文件进行分割，拿到他的第一个部分00001
+
+			splitNames := strings.Split(entry.Name(), ".")
+			//获得文件ID
+			fileId, err := strconv.Atoi(splitNames[0])
+
+			if err != nil {
+				return ErrDataDirCorrupted
+			}
+			fileIds = append(fileIds, fileId)
+
+		}
+	}
+	//对文件ID进行排序，从小到大
+
+	//遍历每个文件ID，打开对应的数据文件
+	for i, fid := range fileIds {
+		dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid))
+		if err != nil {
+			return err
+		}
+		if i == len(fileIds)-1 {
+			//说明这个是最有一个id，就设置成活跃文件
+			db.activeFile = dataFile
+		} else {
+			db.olderFile[uint32(fid)] = dataFile
+		}
+
+	}
 	return nil
 }
