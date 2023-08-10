@@ -3,7 +3,9 @@ package BitcaskDB
 import (
 	"BitcaskDB/data"
 	"BitcaskDB/index"
+	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,6 +13,7 @@ import (
 
 //DB Bitcask存储引擎的实例
 type DB struct {
+	fileIds    []int   //文件ID，只能在加载索引的时候使用
 	options    Options //配置信息
 	mu         *sync.RWMutex
 	activeFile *data.DataFile            //当前活跃文件，可以用来写入
@@ -43,6 +46,11 @@ func Open(options Options) (*DB, error) {
 	if err := db.loadDataFiles(); err != nil {
 		return nil, err
 	}
+	//从数据文件中加载索引
+	if err := db.loadIndexFromDataFiles(); err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 func (db *DB) Put(key []byte, value []byte) error {
@@ -93,7 +101,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 		return nil, ErrDataFileNotFound
 	}
 	//找到了对应的数据文件，根据其偏移量来读取数据
-	logRecord, err := dataFile.ReadLogRecord(logRecordPos.Offset)
+	logRecord, _, err := dataFile.ReadLogRecord(logRecordPos.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +112,31 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 
 	return logRecord.Value, nil
 
+}
+
+//根据key删除对应的数据
+func (db *DB) Delete(key []byte) error {
+	if len(key) == 0 {
+		return ErrKeyIsEmpty
+	}
+	//在内存索引中查找这个key是否存在
+	if pos := db.index.Get(key); pos == nil {
+		//当前key不存在，直接返回
+		return nil
+	}
+	//构造LogRecord标识其是被删除的
+	logRecord := &data.LogRecord{Key: key, Type: data.LogRecordDeleted}
+	//写入到数据文件中
+	_, err := db.appendLogRecord(logRecord)
+	if err != nil {
+		return err
+	}
+	//在内存索引中将对应的key删除掉
+	ok := db.index.Delete(key)
+	if !ok {
+		return ErrIndexUpdateFailed
+	}
+	return nil
 }
 
 //插入后会返回这个位置的索引信息
@@ -205,6 +238,8 @@ func (db *DB) loadDataFile() error {
 		}
 	}
 	//对文件ID进行排序，从小到大
+	sort.Ints(fileIds)
+	db.fileIds = fileIds
 
 	//遍历每个文件ID，打开对应的数据文件
 	for i, fid := range fileIds {
@@ -221,4 +256,47 @@ func (db *DB) loadDataFile() error {
 
 	}
 	return nil
+}
+
+//从数据文件中读取数据构造索引
+func (db *DB) loadIndexFromDataFiles() error {
+	//没有文件，说明当前是一个空的数据库
+	if len(db.fileIds) == 0 {
+		return nil
+	}
+	//遍历所有的文件ID，处理文件中的记录
+	for i, fid := range db.fileIds {
+		var fileId = uint32(fid)
+		var dataFile *data.DataFile
+		if fileId == db.activeFile.FileId {
+			dataFile = db.activeFile
+		} else {
+			dataFile = db.olderFile[fileId]
+		}
+		var offset uint64 = 0
+		for {
+			logRecord, size, err := dataFile.ReadLogRecord(offset)
+			if err != nil {
+				//文件读取完了
+				if err == io.EOF {
+					break
+				} else {
+					return err
+				}
+			}
+			//构造内存索引并保存
+			logRecordPos := &data.LogRecordPos{Fid: fileId, Offset: offset}
+			if logRecord.Type == data.LogRecordDeleted {
+				db.index.Delete(logRecord.Key)
+			} else {
+				db.index.Put(logRecord.Key, logRecordPos)
+			}
+			//递增offset，下一次从新的位置开始读取
+			offset += size
+		}
+		//如果当前为活跃文件。就需要更新这个文件的WriteOff
+		if i == len(db.fileIds)-1 {
+			db.activeFile.WriteOff = offset
+		}
+	}
 }
