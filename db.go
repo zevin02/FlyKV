@@ -21,7 +21,7 @@ type DB struct {
 	index      index.Indexer             //数据的内存索引
 }
 
-//打开bitcask存储引擎实例
+//Open 打开bitcask存储引擎实例
 func Open(options Options) (*DB, error) {
 	//对用户传入的配置项进行校验
 	if err := checkOptions(options); err != nil {
@@ -43,7 +43,7 @@ func Open(options Options) (*DB, error) {
 		index:     index.NewIndex(options.IndexType),
 	}
 	//加载数据文件
-	if err := db.loadDataFiles(); err != nil {
+	if err := db.loadDataFile(); err != nil {
 		return nil, err
 	}
 	//从数据文件中加载索引
@@ -53,18 +53,19 @@ func Open(options Options) (*DB, error) {
 	return db, nil
 }
 
+//Put 将key和value添加到数据库中
 func (db *DB) Put(key []byte, value []byte) error {
 	//判断key是否有效
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
 	}
 	//构造LogRecord结构体
-	log_record := &data.LogRecord{
+	logRecord := &data.LogRecord{
 		Key:   key,
 		Value: value,
 		Type:  data.LogRecordNormal,
 	}
-	pos, err := db.appendLogRecord(log_record)
+	pos, err := db.appendLogRecord(logRecord)
 	if err != nil {
 		return err
 	}
@@ -75,7 +76,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 
 }
 
-//根据Key读取数据
+//Get 根据Key读取数据
 func (db *DB) Get(key []byte) ([]byte, error) {
 	//打开读锁
 	db.mu.RLock()
@@ -119,7 +120,7 @@ func (db *DB) Delete(key []byte) error {
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
 	}
-	//在内存索引中查找这个key是否存在
+	//在内存索引中查找这个key是否存在,避免用户一致调用delete方法去删除一个不存在的key，导致磁盘文件膨胀
 	if pos := db.index.Get(key); pos == nil {
 		//当前key不存在，直接返回
 		return nil
@@ -195,7 +196,7 @@ func (db *DB) setActiveDataFile() error {
 	if db.activeFile != nil {
 		initialFileId = db.activeFile.FileId + 1
 	}
-	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId)
+	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId) //打开一个新的活跃文件用于读写
 	if err != nil {
 		return err
 	}
@@ -239,7 +240,7 @@ func (db *DB) loadDataFile() error {
 	}
 	//对文件ID进行排序，从小到大
 	sort.Ints(fileIds)
-	db.fileIds = fileIds
+	db.fileIds = fileIds //获得目录下的所有文件名，供后续读取文件构建索引
 
 	//遍历每个文件ID，打开对应的数据文件
 	for i, fid := range fileIds {
@@ -248,9 +249,10 @@ func (db *DB) loadDataFile() error {
 			return err
 		}
 		if i == len(fileIds)-1 {
-			//说明这个是最有一个id，就设置成活跃文件
+			//说明这个是最后一个id，就设置成活跃文件
 			db.activeFile = dataFile
 		} else {
+			//否则就放入到旧文件集合中
 			db.olderFile[uint32(fid)] = dataFile
 		}
 
@@ -269,13 +271,16 @@ func (db *DB) loadIndexFromDataFiles() error {
 		var fileId = uint32(fid)
 		var dataFile *data.DataFile
 		if fileId == db.activeFile.FileId {
+			//当前文件是活跃文件，就从活跃文件中获得
 			dataFile = db.activeFile
 		} else {
+			//当前文件是旧文件，就从旧文件中根据ID号码获得
 			dataFile = db.olderFile[fileId]
 		}
 		var offset uint64 = 0
+		//读取当前文件的数据，根据读取的数据来构造索引
 		for {
-			logRecord, size, err := dataFile.ReadLogRecord(offset)
+			logRecord, size, err := dataFile.ReadLogRecord(offset) //根据offset读取一条log记录
 			if err != nil {
 				//文件读取完了
 				if err == io.EOF {
@@ -285,11 +290,16 @@ func (db *DB) loadIndexFromDataFiles() error {
 				}
 			}
 			//构造内存索引并保存
+			var ok bool
 			logRecordPos := &data.LogRecordPos{Fid: fileId, Offset: offset}
+
 			if logRecord.Type == data.LogRecordDeleted {
-				db.index.Delete(logRecord.Key)
+				ok = db.index.Delete(logRecord.Key)
 			} else {
-				db.index.Put(logRecord.Key, logRecordPos)
+				ok = db.index.Put(logRecord.Key, logRecordPos)
+			}
+			if !ok {
+				return ErrIndexUpdateFailed
 			}
 			//递增offset，下一次从新的位置开始读取
 			offset += size

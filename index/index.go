@@ -25,7 +25,7 @@ const (
 	ART
 )
 
-//初始化类型索引
+//NewIndex 工厂函数，用来创建不同类新的索引
 func NewIndex(typ IndexType) Indexer {
 	switch typ {
 	case Btree:
@@ -37,7 +37,7 @@ func NewIndex(typ IndexType) Indexer {
 	}
 }
 
-//BTree中使用到了Item的抽象方法,所以这里需要实现一个接口来实现相应的方法,插入到btree的时候实际上就是插入这个数据结构
+//Item BTree中使用到了Item的抽象方法,所以这里需要实现一个接口来实现相应的方法,插入到btree的时候实际上就是插入这个数据结构
 type Item struct {
 	key []byte             //key
 	pos *data.LogRecordPos //对应的数据
