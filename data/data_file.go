@@ -59,7 +59,7 @@ func (df *DataFile) ReadLogRecord(offset uint64) (*LogRecord, uint64, error) {
 		return nil, 0, err
 	}
 	//对头部进行解码
-	header, headerSize, err := DecodeLogRecordHeader(headerBuf)
+	header, headerSize := DecodeLogRecordHeader(headerBuf)
 	if header == nil {
 		//头部为空，没有读取到，就说明这个文件为空，或者已经读取完了
 		return nil, 0, io.EOF
@@ -83,7 +83,7 @@ func (df *DataFile) ReadLogRecord(offset uint64) (*LogRecord, uint64, error) {
 		logRecord.Value = kvBuf[keySize:]
 	}
 
-	//数据的crc是否正确，检查有效性
+	//数据的crc是否正确，检查有效性,从第4个字节开始进行校验
 	crc := getLogRecordCRC(logRecord, headerBuf[crc32.Size:headerSize])
 	if crc != header.crc {
 		//校验检查的有问题
