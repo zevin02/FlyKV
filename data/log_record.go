@@ -19,7 +19,7 @@ const (
 	// itoa 相当于0,往后进行枚举
 	//LogRecordNormal：正常写入
 	//Deleted:删除数据
-	LogRecordNormal LogRecordType = iota + 1
+	LogRecordNormal LogRecordType = iota
 	LogRecordDeleted
 )
 

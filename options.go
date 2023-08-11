@@ -11,7 +11,14 @@ type IndexType = int8
 
 const (
 	//Btree索引
-	Btree IndexType = iota + 1
+	Btree IndexType = iota
 	//ART自适应基数树
 	ART
 )
+
+var DefaultOperations = Options{
+	DirPath:   string("/home/zevin/githubmanage/program/BitcaskDB/storefile"),
+	FileSize:  256 * 1024 * 1024,
+	SyncWrite: false,
+	IndexType: Btree,
+}

@@ -73,7 +73,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	if ok := db.index.Put(key, pos); !ok {
 		return ErrIndexUpdateFailed
 	}
-
+	return nil
 }
 
 //Get 根据Key读取数据
@@ -309,4 +309,5 @@ func (db *DB) loadIndexFromDataFiles() error {
 			db.activeFile.WriteOff = offset
 		}
 	}
+	return nil
 }

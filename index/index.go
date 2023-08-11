@@ -20,7 +20,7 @@ type IndexType = int8
 
 const (
 	//Btree索引
-	Btree IndexType = iota + 1
+	Btree IndexType = iota
 	//ART自适应基数树
 	ART
 )

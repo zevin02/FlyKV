@@ -45,7 +45,7 @@ func TestEncodeLogRecord(t *testing.T) {
 
 func TestDecodeLogRecordHeader(t *testing.T) {
 	//一般情况
-	header := []byte{134, 200, 121, 217, 1, 8, 8}
+	header := []byte{134, 200, 121, 217, 0, 8, 8}
 	res, size := DecodeLogRecordHeader(header)
 	assert.NotNil(t, res)
 	assert.Equal(t, int64(7), size)
@@ -55,7 +55,7 @@ func TestDecodeLogRecordHeader(t *testing.T) {
 	assert.Equal(t, uint32(4), res.valueSize)
 
 	//value为空的情况
-	header = []byte{189, 247, 47, 168, 1, 8, 0}
+	header = []byte{189, 247, 47, 168, 0, 8, 0}
 	res, size = DecodeLogRecordHeader(header)
 	assert.NotNil(t, res)
 	assert.Equal(t, int64(7), size)
@@ -65,7 +65,7 @@ func TestDecodeLogRecordHeader(t *testing.T) {
 	assert.Equal(t, uint32(0), res.valueSize)
 
 	//deleted情况
-	header = []byte{135, 174, 155, 64, 2, 8, 8}
+	header = []byte{135, 174, 155, 64, 1, 8, 8}
 	res, size = DecodeLogRecordHeader(header)
 	assert.NotNil(t, res)
 	assert.Equal(t, int64(7), size)
@@ -82,25 +82,25 @@ func TestGetLogRecordCRC(t *testing.T) {
 		Value: []byte("lily"),
 		Type:  LogRecordNormal,
 	}
-	header := []byte{134, 200, 121, 217, 1, 8, 8}
+	header := []byte{134, 200, 121, 217, 0, 8, 8}
 	crc := getLogRecordCRC(logRecord, header[crc32.Size:])
-	assert.Equal(t, uint32(3648637062), crc)
+	assert.Equal(t, uint32(0x18f71746), crc)
 
 	logRecord = &LogRecord{
 		Key:  []byte("name"),
 		Type: LogRecordNormal,
 	}
-	header = []byte{189, 247, 47, 168, 1, 8, 0}
+	header = []byte{189, 247, 47, 168, 0, 8, 0}
 	crc = getLogRecordCRC(logRecord, header[crc32.Size:])
-	assert.Equal(t, uint32(2821715901), crc)
+	assert.Equal(t, uint32(0xe58fc09), crc)
 
 	logRecord = &LogRecord{
 		Key:   []byte("name"),
 		Value: []byte("lily"),
 		Type:  LogRecordDeleted,
 	}
-	header = []byte{135, 174, 155, 64, 2, 8, 8}
+	header = []byte{135, 174, 155, 64, 1, 8, 8}
 	crc = getLogRecordCRC(logRecord, header[crc32.Size:])
-	assert.Equal(t, uint32(1083944583), crc)
+	assert.Equal(t, uint32(0xd979c886), crc)
 
 }
