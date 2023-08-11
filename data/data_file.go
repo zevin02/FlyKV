@@ -19,12 +19,12 @@ var (
 type DataFile struct {
 	FileId    uint32        //文件ID
 	WriteOff  uint64        //文件写入到了哪个位置
-	IoManager fio.IOManager //io的读写管理,使用接口，后期可以给多个使用
+	IoManager fio.IOManager //管理io的读写管理,使用接口，
 }
 
-//OpenDataFile 打开新的数据文件
+//OpenDataFile 打开新的数据文件，作为一个新的活跃文件
 func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
-	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d", fileId), DataFileSuffix) //构造文件路径
+	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d%s", fileId, DataFileSuffix))
 	ioManager, err := fio.NewIOManager(fileName)
 	if err != nil {
 		return nil, err

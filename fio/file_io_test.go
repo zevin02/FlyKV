@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const DirPath = "/home/zevin/githubmanage/program/BitcaskDB/tmp"
+
 func destroyFile(name string) {
 	if err := os.RemoveAll(name); err != nil {
 		panic(err)
@@ -15,7 +17,7 @@ func destroyFile(name string) {
 
 func TestNewFileIOManager(t *testing.T) {
 	//在当前目录的tmp下面构造一个文件
-	path := filepath.Join("/home/zevin/githubmanage/program/BitcaskDB/tmp", "a.txt")
+	path := filepath.Join(DirPath, "a.txt")
 	fio, err := newFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
@@ -26,7 +28,7 @@ func TestNewFileIOManager(t *testing.T) {
 
 func TestNewFileIO_Write(t *testing.T) {
 	//在当前目录的tmp下面构造一个文件
-	path := filepath.Join("/home/zevin/githubmanage/program/BitcaskDB/tmp", "a.txt")
+	path := filepath.Join(DirPath, "a.txt")
 	fio, err := newFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
@@ -41,7 +43,7 @@ func TestNewFileIO_Write(t *testing.T) {
 }
 
 func TestFileIO_Read(t *testing.T) {
-	path := filepath.Join("/home/zevin/githubmanage/program/BitcaskDB/tmp", "a.txt")
+	path := filepath.Join(DirPath, "a.txt")
 	fio, err := newFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
@@ -65,7 +67,7 @@ func TestFileIO_Read(t *testing.T) {
 }
 
 func TestFileIO_Sync(t *testing.T) {
-	path := filepath.Join("/home/zevin/githubmanage/program/BitcaskDB/tmp", "a.txt")
+	path := filepath.Join(DirPath, "a.txt")
 	fio, err := newFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
@@ -76,7 +78,7 @@ func TestFileIO_Sync(t *testing.T) {
 
 }
 func TestFileIO_Close(t *testing.T) {
-	path := filepath.Join("/home/zevin/githubmanage/program/BitcaskDB/tmp", "a.txt")
+	path := filepath.Join(DirPath, "a.txt")
 	fio, err := newFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
