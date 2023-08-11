@@ -59,3 +59,57 @@ func TestDataFile_Sync(t *testing.T) {
 	err = df1.Sync()
 	assert.Nil(t, err)
 }
+
+func TestDataFile_ReadLogRecord(t *testing.T) {
+	df1, err := OpenDataFile(DirPath, 1111)
+	assert.Nil(t, err)
+	assert.NotNil(t, df1)
+	//只有一条logrecord
+	logRecord := &LogRecord{
+		Key:   []byte("name"),
+		Value: []byte("lilyai"),
+		Type:  LogRecordNormal,
+	}
+
+	encBuf, size := EncodeLogRecord(logRecord)
+	err = df1.Write(encBuf)
+	assert.Nil(t, err)
+
+	readRec, readSize, err := df1.ReadLogRecord(0)
+	assert.Nil(t, err)
+	assert.Equal(t, logRecord, readRec)
+	assert.Equal(t, size, readSize)
+
+	//多条logrecord，从不同位置读取
+	logRecord = &LogRecord{
+		Key:   []byte("name"),
+		Value: []byte("a new value"),
+		Type:  LogRecordNormal,
+	}
+
+	encBuf, size = EncodeLogRecord(logRecord)
+	err = df1.Write(encBuf)
+	assert.Nil(t, err)
+
+	readRec, readSize, err = df1.ReadLogRecord(17)
+	assert.Nil(t, err)
+	assert.Equal(t, logRecord, readRec)
+	assert.Equal(t, size, readSize)
+
+	//被删除的数据在文件的末尾
+	logRecord = &LogRecord{
+		Key:   []byte("name"),
+		Value: []byte(""),
+		Type:  LogRecordDeleted,
+	}
+
+	encBuf, size = EncodeLogRecord(logRecord)
+	err = df1.Write(encBuf)
+	assert.Nil(t, err)
+
+	readRec, readSize, err = df1.ReadLogRecord(39)
+	assert.Nil(t, err)
+	assert.Equal(t, logRecord, readRec)
+	assert.Equal(t, size, readSize)
+
+}

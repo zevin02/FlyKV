@@ -107,7 +107,7 @@ func (df *DataFile) Write(buf []byte) error {
 
 func (df *DataFile) readNByte(n int64, offset uint64) (b []byte, err error) {
 	b = make([]byte, n)
-	_, err = df.IoManager.Read(b, n)
+	_, err = df.IoManager.Read(b, int64(offset))
 	if err != nil {
 		return nil, err
 	}
