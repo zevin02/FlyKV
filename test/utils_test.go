@@ -1,0 +1,20 @@
+package test
+
+import (
+	"BitcaskDB/utils"
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
+
+func TestGetTestKey(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		assert.NotNil(t, string(utils.GetTestKey(i)))
+	}
+}
+
+func TestRandomValue(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		assert.NotNil(t, string(utils.RandomValue(10)))
+	}
+
+}

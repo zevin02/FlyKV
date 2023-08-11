@@ -9,7 +9,7 @@ type FileIO struct {
 
 //初始化标准文件IO对象
 //fileName 要打开文件的路径名字
-func newFileIOManager(fileName string) (*FileIO, error) {
+func NewFileIOManager(fileName string) (*FileIO, error) {
 	//打开一个文件
 	fd, err := os.OpenFile(
 		fileName,

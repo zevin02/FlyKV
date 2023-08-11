@@ -21,5 +21,5 @@ type IOManager interface {
 
 //初始化IOManger,目前只有一个FileIO
 func NewIOManager(filename string) (IOManager, error) {
-	return newFileIOManager(filename)
+	return NewFileIOManager(filename)
 }

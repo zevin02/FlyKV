@@ -65,13 +65,13 @@ func (df *DataFile) ReadLogRecord(offset uint64) (*LogRecord, uint64, error) {
 		return nil, 0, io.EOF
 	}
 	//同样也是空数据
-	if header.crc == 0 && header.keySize == 0 && header.valueSize == 0 {
+	if header.Crc == 0 && header.KeySize == 0 && header.ValueSize == 0 {
 		return nil, 0, io.EOF
 	}
 	//取出key和value的长度
-	keySize, valueSize := int64(header.keySize), int64(header.valueSize)
+	keySize, valueSize := int64(header.KeySize), int64(header.ValueSize)
 	var recordSize = headerSize + keySize + valueSize //当前记录的字节长度
-	logRecord := &LogRecord{Type: header.recordType}
+	logRecord := &LogRecord{Type: header.RecordType}
 	if keySize > 0 || valueSize > 0 {
 		kvBuf, err := df.readNByte(keySize+valueSize, offset+uint64(headerSize))
 		if err != nil {
@@ -84,8 +84,8 @@ func (df *DataFile) ReadLogRecord(offset uint64) (*LogRecord, uint64, error) {
 	}
 
 	//数据的crc是否正确，检查有效性,从第4个字节开始进行校验
-	crc := getLogRecordCRC(logRecord, headerBuf[crc32.Size:headerSize])
-	if crc != header.crc {
+	crc := GetLogRecordCRC(logRecord, headerBuf[crc32.Size:headerSize])
+	if crc != header.Crc {
 		//校验检查的有问题
 		return nil, 0, ErrInvalidCrc
 	}

@@ -24,10 +24,10 @@ const (
 )
 
 type LogRecordHeader struct {
-	crc        uint32        //crc校验
-	recordType LogRecordType //标识LogRecord的类型
-	keySize    uint32        //key的长度
-	valueSize  uint32        //value的长度
+	Crc        uint32        //crc校验
+	RecordType LogRecordType //标识LogRecord的类型
+	KeySize    uint32        //key的长度
+	ValueSize  uint32        //value的长度
 }
 
 //crc type keysize valuesize
@@ -80,8 +80,8 @@ func DecodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
 		return nil, 0
 	}
 	header := &LogRecordHeader{
-		crc:        binary.LittleEndian.Uint32(buf[:4]),
-		recordType: buf[4],
+		Crc:        binary.LittleEndian.Uint32(buf[:4]),
+		RecordType: buf[4],
 	}
 	var index = 5
 	//分别解码获得keysize，和字节大小
@@ -90,15 +90,15 @@ func DecodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
 	index += n
 	valueSize, n := binary.Varint(buf[index:])
 	index += n
-	header.keySize = uint32(keySize)
-	header.valueSize = uint32(valueSize)
+	header.KeySize = uint32(keySize)
+	header.ValueSize = uint32(valueSize)
 
 	return header, int64(index)
 }
 
 //传入的是除了crc的header头部字节数组
 
-func getLogRecordCRC(lr *LogRecord, headerBuf []byte) uint32 {
+func GetLogRecordCRC(lr *LogRecord, headerBuf []byte) uint32 {
 	if lr == nil {
 		return 0
 	}

@@ -1,6 +1,7 @@
-package fio
+package test
 
 import (
+	"BitcaskDB/fio"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
@@ -18,7 +19,7 @@ func destroyFile(name string) {
 func TestNewFileIOManager(t *testing.T) {
 	//在当前目录的tmp下面构造一个文件
 	path := filepath.Join(DirPath, "a.txt")
-	fio, err := newFileIOManager(path)
+	fio, err := fio.NewFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
 
@@ -29,7 +30,8 @@ func TestNewFileIOManager(t *testing.T) {
 func TestNewFileIO_Write(t *testing.T) {
 	//在当前目录的tmp下面构造一个文件
 	path := filepath.Join(DirPath, "a.txt")
-	fio, err := newFileIOManager(path)
+	fio, err := fio.NewFileIOManager(path)
+
 	//测试完成后将文件删除
 	defer destroyFile(path)
 	assert.Nil(t, err)
@@ -44,7 +46,7 @@ func TestNewFileIO_Write(t *testing.T) {
 
 func TestFileIO_Read(t *testing.T) {
 	path := filepath.Join(DirPath, "a.txt")
-	fio, err := newFileIOManager(path)
+	fio, err := fio.NewFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
 	assert.Nil(t, err)
@@ -68,7 +70,7 @@ func TestFileIO_Read(t *testing.T) {
 
 func TestFileIO_Sync(t *testing.T) {
 	path := filepath.Join(DirPath, "a.txt")
-	fio, err := newFileIOManager(path)
+	fio, err := fio.NewFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
 	assert.Nil(t, err)
@@ -79,7 +81,7 @@ func TestFileIO_Sync(t *testing.T) {
 }
 func TestFileIO_Close(t *testing.T) {
 	path := filepath.Join(DirPath, "a.txt")
-	fio, err := newFileIOManager(path)
+	fio, err := fio.NewFileIOManager(path)
 	//测试完成后将文件删除
 	defer destroyFile(path)
 	assert.Nil(t, err)
