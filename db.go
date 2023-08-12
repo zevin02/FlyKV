@@ -122,6 +122,38 @@ func (db *DB) getValueByPos(logRecordPos *data.LogRecordPos) ([]byte, error) {
 	return logRecord.Value, nil
 }
 
+//ListKeys 获取数据中所有的key
+func (db *DB) ListKeys() [][]byte {
+	iter := db.index.Iterator(false)
+	keys := make([][]byte, db.index.Size())
+	var idx int = 0
+	for iter.Rewind(); iter.Valid(); iter.Next() {
+		keys[idx] = iter.Key()
+		idx++
+	}
+	return keys
+}
+
+//Fold 获取所有的数据，并执行用户指定的操作
+func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	iterator := db.index.Iterator(false)
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		val, err := db.getValueByPos(iterator.Value())
+		if err != nil {
+			return err
+		}
+		//如果不满足用户需求就跳出循环
+		if !fn(iterator.Key(), val) {
+			break
+		}
+
+	}
+	return nil
+
+}
+
 //根据key删除对应的数据
 func (db *DB) Delete(key []byte) error {
 	if len(key) == 0 {
@@ -147,8 +179,33 @@ func (db *DB) Delete(key []byte) error {
 	return nil
 }
 
+//关闭数据库
 func (db *DB) Close() error {
+	if db.activeFile == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	//关闭当前的活跃文件
+	if err := db.activeFile.Close(); err != nil {
+		return err
+	}
+	for _, file := range db.olderFile {
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (db *DB) Sync() error {
+	if db.activeFile == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.activeFile.Sync()
 }
 
 //插入后会返回这个位置的索引信息

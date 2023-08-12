@@ -7,16 +7,13 @@ import (
 	"testing"
 )
 
-func TestName(t *testing.T) {
-
-}
-
 //测试完成之后销毁DB目录
 
 func destroyDB(db *DB) {
 	if db != nil {
 		if db.activeFile != nil {
-			_ = db.activeFile.Close()
+			_ = db.Close()
+
 		}
 		err := os.RemoveAll(db.options.DirPath)
 		if err != nil {
@@ -74,7 +71,7 @@ func TestDB_Put(t *testing.T) {
 	assert.Equal(t, 2, len(db.olderFile))
 
 	//6.重启后再Put数据
-	err = db.activeFile.Close()
+	err = db.Close()
 	assert.Nil(t, err)
 
 	//7.重启数据库
@@ -136,7 +133,7 @@ func TestDB_Get(t *testing.T) {
 	assert.NotNil(t, val5)
 
 	//6.重启后，前面数据都能拿到
-	err = db.activeFile.Close()
+	err = db.Close()
 	assert.Nil(t, err)
 
 	//重启数据库
@@ -192,7 +189,7 @@ func TestDB_Delete(t *testing.T) {
 	assert.Nil(t, err)
 
 	//5.重启之后，再进行校验
-	err = db.activeFile.Close()
+	err = db.Close()
 	assert.Nil(t, err)
 	//重启数据库
 	db2, err := Open(opts)
@@ -201,4 +198,81 @@ func TestDB_Delete(t *testing.T) {
 	val2, err := db2.Get(utils.GetTestKey(22))
 	assert.Nil(t, err)
 	assert.Equal(t, val1, val2)
+}
+
+func TestDB_ListKeys(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	//数据库为空的情况
+	keys := db.ListKeys()
+	assert.Equal(t, 0, len(keys))
+
+	//只有一条数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(20))
+	assert.Nil(t, err)
+	keys2 := db.ListKeys()
+	assert.Equal(t, 1, len(keys2))
+
+	//有多条数据的情况
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(20))
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(111), utils.RandomValue(20))
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(1111), utils.RandomValue(20))
+	assert.Nil(t, err)
+	keys3 := db.ListKeys()
+	for _, key := range keys3 {
+		t.Log(string(key))
+	}
+	assert.Equal(t, 4, len(keys3))
+}
+
+func TestDB_Fold(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(20))
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(111), utils.RandomValue(20))
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(1111), utils.RandomValue(20))
+	assert.Nil(t, err)
+	db.Fold(func(key []byte, value []byte) bool {
+		//这里可以自定义对key和value进行操作
+		assert.NotNil(t, key)
+		assert.NotNil(t, value)
+		return true
+	})
+	assert.Nil(t, err)
+
+}
+
+func TestDB_Close(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(20))
+	assert.Nil(t, err)
+}
+func TestDB_Sync(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(20))
+	assert.Nil(t, err)
+	err = db.Sync()
+	assert.Nil(t, err)
 }

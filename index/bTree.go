@@ -23,6 +23,10 @@ func NewBtree() *BTree {
 	}
 }
 
+func (bt *BTree) Size() int {
+	return bt.tree.Len()
+}
+
 //给BTRee实现这些接口，主要是调用BTree的一些功能和相关的方法
 func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) bool {
 	it := &Item{key: key, pos: pos} //构造数据进行插入，获得指针
