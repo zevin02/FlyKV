@@ -48,3 +48,20 @@ func (ai *Item) Less(bi btree.Item) bool {
 	//bi.(*Item)是将bi转化成为*Item类型，类型断言，就是将接口类型转化成为具体的类型
 	return bytes.Compare(ai.key, bi.(*Item).key) == -1
 }
+
+type Iterator interface {
+	//Rewind 重新回到迭代器的起点，即第一个位置
+	Rewind()
+	//Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
+	Seek(key []byte)
+	//Next 跳转到下一个key
+	Next()
+	//Valid 是否有效，即时有已经遍历完了所有的Key，用来退出遍历
+	Valid() bool
+	//Key 当前遍历位置的key数据
+	Key() []byte
+	//Value 当前遍历位置的value数据
+	Value() *data.LogRecordPos
+	//Close 关闭迭代器，释放相应的资源
+	Close()
+}

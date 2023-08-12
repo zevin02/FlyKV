@@ -55,3 +55,68 @@ func (bt *BTree) Delete(key []byte) bool {
 	return true
 
 }
+
+//定义一个BTree的索引迭代器
+type btreeIterator struct {
+	currIndex int     //遍历到数组的哪一个下标
+	reverse   bool    //是否是一个反向的遍历
+	value     []*Item //key位置索引信息
+
+}
+
+func newBtreeIterator(tree *btree.BTree, reverse bool) *btreeIterator {
+	var idx int
+	values := make([]*Item, tree.Len())
+	saveValues := func(it btree.Item) bool {
+		values[idx] = it.(*Item) //将it类型转化成*item类型
+		idx++
+		return true
+	}
+	if reverse {
+		//逆序存储value
+		tree.Descend(saveValues)
+	} else {
+		//顺序存储value
+		tree.Ascend(saveValues)
+	}
+	return &btreeIterator{
+		currIndex: 0,
+		reverse:   reverse,
+		value:     values,
+	}
+}
+
+//Rewind 重新回到迭代器的起点，即第一个位置
+func (bti *btreeIterator) Rewind() {
+
+}
+
+//Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
+func (bti *btreeIterator) Seek(key []byte) {
+
+}
+
+//Next 跳转到下一个key
+func (bti *btreeIterator) Next() {
+
+}
+
+//Valid 是否有效，即时有已经遍历完了所有的Key，用来退出遍历
+func (bti *btreeIterator) Valid() bool {
+
+}
+
+//Key 当前遍历位置的key数据
+func (bti *btreeIterator) Key() []byte {
+
+}
+
+//Value 当前遍历位置的value数据
+func (bti *btreeIterator) Value() *data.LogRecordPos {
+
+}
+
+//Close 关闭迭代器，释放相应的资源
+func (bti *btreeIterator) Close() {
+
+}

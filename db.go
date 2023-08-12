@@ -140,6 +140,10 @@ func (db *DB) Delete(key []byte) error {
 	return nil
 }
 
+func (db *DB) Close() error {
+
+}
+
 //插入后会返回这个位置的索引信息
 //追加数据写入到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
