@@ -89,6 +89,14 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	if logRecordPos == nil {
 		return nil, ErrKeyNotFound
 	}
+	//从数据文件中获取value
+	return db.getValueByPos(logRecordPos)
+
+}
+
+//getValueByPos 根据位置信息获取value
+func (db *DB) getValueByPos(logRecordPos *data.LogRecordPos) ([]byte, error) {
+
 	//获得到位置信息
 	//根据文件Id找到对应的数据文件
 	var dataFile *data.DataFile
@@ -112,7 +120,6 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	}
 
 	return logRecord.Value, nil
-
 }
 
 //根据key删除对应的数据
@@ -141,7 +148,7 @@ func (db *DB) Delete(key []byte) error {
 }
 
 func (db *DB) Close() error {
-
+	return nil
 }
 
 //插入后会返回这个位置的索引信息

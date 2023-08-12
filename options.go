@@ -10,15 +10,28 @@ type Options struct {
 type IndexType = int8
 
 const (
-	//Btree索引
+	//Btree 索引
 	Btree IndexType = iota
-	//ART自适应基数树
+	//ART 自适应基数树
 	ART
 )
 
 var DefaultOperations = Options{
 	DirPath:   string("/home/zevin/githubmanage/program/BitcaskDB/storefile"),
-	FileSize:  256 * 1024 * 1024,
+	FileSize:  256 * 1024 * 1024, //256MB
 	SyncWrite: false,
 	IndexType: Btree,
+}
+
+//IteratorOptions 索引迭代器的配置项
+type IteratorOptions struct {
+	//遍历前缀为指定的Key，默认为空
+	Prefix []byte
+	//是否为反向遍历
+	Reverse bool
+}
+
+var DefaultIteratorOptions = IteratorOptions{
+	Prefix:  nil,
+	Reverse: false,
 }
