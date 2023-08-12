@@ -169,7 +169,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 			return nil, err
 		}
 	}
-	writeOff := db.activeFile.WriteOff
+	writeOff := db.activeFile.WriteOff //返回数据在文件中的偏移位置
 	//写入到文件中
 	if err := db.activeFile.Write(encRecord); err != nil {
 		return nil, err

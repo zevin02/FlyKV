@@ -16,11 +16,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = db.Put([]byte("age"), []byte("10"))
+
+	err = db.Put([]byte("name"), []byte("10"))
 	if err != nil {
 		panic(err)
 	}
-	val, err := db.Get([]byte("age"))
+	val, err := db.Get([]byte("name"))
 	if err != nil {
 		panic(err)
 	}
@@ -28,6 +29,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	fmt.Printf("value=%s", string(val))
 
 }
