@@ -2,17 +2,19 @@ package index
 
 import (
 	"BitcaskDB/data"
+	"bytes"
 	"github.com/google/btree"
+	"sort"
 	"sync"
 )
 
-//BTree索引，封装google的btree库,读操作是并发安全的，写操作并发不安全（加锁）
+//BTree 索引，封装google的btree库,读操作是并发安全的，写操作并发不安全（加锁）
 type BTree struct {
 	tree *btree.BTree
 	lock *sync.RWMutex //使用读写锁保证并发安全，读取资源的时候可以多个线程并发访问，写的时候只有一个线程允许
 }
 
-//NewBtree初始化BTree索引结构
+//NewBtree 初始化BTree索引结构
 func NewBtree() *BTree {
 	return &BTree{
 		//控制btree叶子节点的数量
@@ -56,12 +58,20 @@ func (bt *BTree) Delete(key []byte) bool {
 
 }
 
+func (bt *BTree) Iterator(reverse bool) Iterator {
+	if bt.tree == nil {
+		return nil
+	}
+	bt.lock.RLock()
+	defer bt.lock.RUnlock()
+	return newBtreeIterator(bt.tree, reverse)
+}
+
 //定义一个BTree的索引迭代器
 type btreeIterator struct {
 	currIndex int     //遍历到数组的哪一个下标
 	reverse   bool    //是否是一个反向的遍历
 	value     []*Item //key位置索引信息
-
 }
 
 func newBtreeIterator(tree *btree.BTree, reverse bool) *btreeIterator {
@@ -88,35 +98,45 @@ func newBtreeIterator(tree *btree.BTree, reverse bool) *btreeIterator {
 
 //Rewind 重新回到迭代器的起点，即第一个位置
 func (bti *btreeIterator) Rewind() {
-
+	bti.currIndex = 0
 }
 
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (bti *btreeIterator) Seek(key []byte) {
-
+	if bti.reverse {
+		bti.currIndex = sort.Search(len(bti.value), func(i int) bool {
+			return bytes.Compare(bti.value[i].key, key) <= 0
+		})
+	} else {
+		//指定比较的规则
+		bti.currIndex = sort.Search(len(bti.value), func(i int) bool {
+			return bytes.Compare(bti.value[i].key, key) >= 0
+		})
+	}
 }
 
 //Next 跳转到下一个key
 func (bti *btreeIterator) Next() {
-
+	bti.currIndex++
 }
 
 //Valid 是否有效，即时有已经遍历完了所有的Key，用来退出遍历
 func (bti *btreeIterator) Valid() bool {
-
+	return bti.currIndex < len(bti.value)
 }
 
 //Key 当前遍历位置的key数据
 func (bti *btreeIterator) Key() []byte {
-
+	return bti.value[bti.currIndex].key
 }
 
 //Value 当前遍历位置的value数据
 func (bti *btreeIterator) Value() *data.LogRecordPos {
+	return bti.value[bti.currIndex].pos
 
 }
 
 //Close 关闭迭代器，释放相应的资源
 func (bti *btreeIterator) Close() {
-
+	bti.value = nil
 }

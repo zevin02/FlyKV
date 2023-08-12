@@ -9,12 +9,14 @@ import (
 //Indexer 定义一个抽象索引接口(内存索引)
 //Get拿到索引的位置信息
 type Indexer interface {
-	//Put向索引中添加key对应的位置信息
+	//Put 向索引中添加key对应的位置信息
 	Put(key []byte, pos *data.LogRecordPos) bool
-	//Get根据Key获得相应的位置信息
+	//Get 根据Key获得相应的位置信息
 	Get(key []byte) *data.LogRecordPos
-	//根据key在位置数据
+	//Delete 根据key在位置数据
 	Delete(key []byte) bool
+	//Iterator 索引迭代器
+	Iterator(reverse bool) Iterator
 }
 type IndexType = int8
 
