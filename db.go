@@ -185,7 +185,7 @@ func (db *DB) Delete(key []byte) error {
 	return nil
 }
 
-//关闭数据库
+//关闭数据库,清空所有的资源
 func (db *DB) Close() error {
 	if db.activeFile == nil {
 		return nil
@@ -202,6 +202,7 @@ func (db *DB) Close() error {
 			return err
 		}
 	}
+	db.seqNo = 0
 	return nil
 }
 
