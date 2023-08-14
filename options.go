@@ -42,3 +42,8 @@ type WriteBatchOptions struct {
 	//在写入到磁盘的时候是否需要进行一个持久化
 	SyncWrite bool
 }
+
+var DefaultWriteBatchOption = WriteBatchOptions{
+	MaxWriteNum: 10000,
+	SyncWrite:   true,
+}

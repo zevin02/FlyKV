@@ -3,6 +3,7 @@ package BitcaskDB
 import (
 	"BitcaskDB/data"
 	"BitcaskDB/index"
+	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -42,6 +43,7 @@ func Open(options Options) (*DB, error) {
 		mu:        new(sync.RWMutex),
 		olderFile: make(map[uint32]*data.DataFile),
 		index:     index.NewIndex(options.IndexType),
+		seqNo:     nonTransactionSeq,
 	}
 	//加载数据文件
 	if err := db.loadDataFile(); err != nil {
@@ -259,6 +261,8 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	}
 	//返回位置信息
 	pos := &data.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff}
+	fmt.Printf("type=%d,offset=%d\n", logRecord.Type, pos.Offset)
+
 	return pos, nil
 
 }
@@ -399,6 +403,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 					delete(transactionRecord, seqNo)
 				} else {
 					//还没有达到事务的结束,先将读取到的数据暂存起来
+					logRecord.Key = key //在内存中我们使用的是没有编码的key
 					transactionRecord[seqNo] = append(transactionRecord[seqNo], &data.TransactionRecord{
 						Pos:    logRecordPos,
 						Record: logRecord,

@@ -9,7 +9,7 @@ import (
 
 const nonTransactionSeq uint64 = 0
 
-var txnFinKey = []byte("txn-Fin")
+var txnFinKey = []byte("txn-fin")
 
 //WriteBatch 原子批量写数据，保证原子性
 type WriteBatch struct {
@@ -50,7 +50,7 @@ func (wb *WriteBatch) Delete(key []byte) error {
 	wb.mu.Lock()
 	defer wb.mu.Unlock()
 
-	//数据不存在直接返回
+	//先在内存索引中查看数据是否存在
 	logRecordPos := wb.db.index.Get(key)
 	if logRecordPos == nil {
 		//数据不存在
@@ -71,6 +71,7 @@ func (wb *WriteBatch) Delete(key []byte) error {
 
 //Commit 将批量数据全部写到数据文件，并更新内存索引
 func (wb *WriteBatch) Commit() error {
+	//加锁保证事务提交的串形化
 	wb.mu.Lock()
 	defer wb.mu.Unlock()
 	if len(wb.pendingWrite) == 0 {
@@ -82,9 +83,6 @@ func (wb *WriteBatch) Commit() error {
 		return ErrExceedMaxBatchNum
 	}
 
-	//加锁保证事务提交的串形化
-	wb.mu.Lock()
-	defer wb.mu.Unlock()
 	//获取当前最新事务的序列号
 	seqNo := atomic.AddUint64(&wb.db.seqNo, 1) //原子加1
 	//内存索引信息保存
@@ -106,7 +104,7 @@ func (wb *WriteBatch) Commit() error {
 
 	//写入一条标注事务结束的数据
 	finishedRecord := &data.LogRecord{
-		Key:  txnFinKey,
+		Key:  logRecordKeyWithSeq(txnFinKey, seqNo),
 		Type: data.LogRecordTxnFinished,
 	}
 	if _, err := wb.db.appendLogRecord(finishedRecord); err != nil {
@@ -118,7 +116,7 @@ func (wb *WriteBatch) Commit() error {
 			return err
 		}
 	}
-	//更新内存索引
+	//根据前面append获得的postion映射，来更新内存索引
 	for _, record := range wb.pendingWrite {
 		pos := postions[string(record.Key)] //获得该数据的位置信息
 		if record.Type == data.LogRecordNormal {
