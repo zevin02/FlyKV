@@ -35,3 +35,10 @@ var DefaultIteratorOptions = IteratorOptions{
 	Prefix:  nil,
 	Reverse: false,
 }
+
+type WriteBatchOptions struct {
+	//一个批次中最多能写入多少的数据
+	MaxWriteNum uint
+	//在写入到磁盘的时候是否需要进行一个持久化
+	SyncWrite bool
+}

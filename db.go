@@ -19,6 +19,7 @@ type DB struct {
 	activeFile *data.DataFile            //当前活跃文件，可以用来写入
 	olderFile  map[uint32]*data.DataFile //旧的数据文件，用来读取
 	index      index.Indexer             //数据的内存索引
+	seqNo      uint64                    //事务序列号，全局递增
 }
 
 //Open 打开bitcask存储引擎实例
@@ -65,7 +66,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 		Value: value,
 		Type:  data.LogRecordNormal,
 	}
-	pos, err := db.appendLogRecord(logRecord)
+	pos, err := db.appendLogRecordWithLock(logRecord)
 	if err != nil {
 		return err
 	}
@@ -167,7 +168,7 @@ func (db *DB) Delete(key []byte) error {
 	//构造LogRecord标识其是被删除的
 	logRecord := &data.LogRecord{Key: key, Type: data.LogRecordDeleted}
 	//写入到数据文件中
-	_, err := db.appendLogRecord(logRecord)
+	_, err := db.appendLogRecordWithLock(logRecord)
 	if err != nil {
 		return err
 	}
@@ -208,12 +209,16 @@ func (db *DB) Sync() error {
 	return db.activeFile.Sync()
 }
 
+//加锁的写入
+func (db *DB) appendLogRecordWithLock(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.appendLogRecord(logRecord)
+}
+
 //插入后会返回这个位置的索引信息
 //追加数据写入到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	//判断当前活跃活跃文件是否存在
 	//如果为空，则初始化数据文件
 	if db.activeFile == nil {
