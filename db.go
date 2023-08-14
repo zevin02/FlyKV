@@ -62,7 +62,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	}
 	//构造LogRecord结构体
 	logRecord := &data.LogRecord{
-		Key:   key,
+		Key:   logRecordKeyWithSeq(key, nonTransactionSeq), //普通的key也加上这个，来辨别是否为事务
 		Value: value,
 		Type:  data.LogRecordNormal,
 	}
@@ -166,7 +166,10 @@ func (db *DB) Delete(key []byte) error {
 		return nil
 	}
 	//构造LogRecord标识其是被删除的
-	logRecord := &data.LogRecord{Key: key, Type: data.LogRecordDeleted}
+	logRecord := &data.LogRecord{
+		Key:  logRecordKeyWithSeq(key, nonTransactionSeq),
+		Type: data.LogRecordDeleted,
+	}
 	//写入到数据文件中
 	_, err := db.appendLogRecordWithLock(logRecord)
 	if err != nil {
@@ -339,6 +342,22 @@ func (db *DB) loadIndexFromDataFiles() error {
 	if len(db.fileIds) == 0 {
 		return nil
 	}
+	//更新内存索引
+	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
+		var ok bool
+		if typ == data.LogRecordDeleted {
+			ok = db.index.Delete(key)
+		} else {
+			ok = db.index.Put(key, pos)
+		}
+		if !ok {
+			panic("fail to update index at startup")
+		}
+	}
+
+	//暂存事务的数据,一个事务里面是有多个数据的
+	transactionRecord := make(map[uint64][]*data.TransactionRecord)
+	var curSeqNo = nonTransactionSeq
 	//遍历所有的文件ID，处理文件中的记录
 	for i, fid := range db.fileIds {
 		var fileId = uint32(fid)
@@ -363,17 +382,36 @@ func (db *DB) loadIndexFromDataFiles() error {
 				}
 			}
 			//构造内存索引并保存
-			var ok bool
 			logRecordPos := &data.LogRecordPos{Fid: fileId, Offset: offset}
 
-			if logRecord.Type == data.LogRecordDeleted {
-				ok = db.index.Delete(logRecord.Key)
+			//解析key，拿到事务的ID
+			key, seqNo := parseLogRecordKey(logRecord.Key)
+			if seqNo == nonTransactionSeq {
+				//非事务提交,直接更新索引
+				updateIndex(key, logRecord.Type, logRecordPos)
 			} else {
-				ok = db.index.Put(logRecord.Key, logRecordPos)
+				//是事务提交
+				if logRecord.Type == data.LogRecordTxnFinished {
+					//事务完成，将对应的seq no的数据一次性进行更新,如果没有这个标志的话，内存索引就不会更新，实现了原子性质
+					for _, txnRecord := range transactionRecord[seqNo] {
+						updateIndex(txnRecord.Record.Key, txnRecord.Record.Type, txnRecord.Pos)
+					}
+					delete(transactionRecord, seqNo)
+				} else {
+					//还没有达到事务的结束,先将读取到的数据暂存起来
+					transactionRecord[seqNo] = append(transactionRecord[seqNo], &data.TransactionRecord{
+						Pos:    logRecordPos,
+						Record: logRecord,
+					})
+
+				}
+
 			}
-			if !ok {
-				return ErrIndexUpdateFailed
+			//更新当前的事务序列号
+			if seqNo > curSeqNo {
+				curSeqNo = seqNo
 			}
+
 			//递增offset，下一次从新的位置开始读取
 			offset += size
 		}
@@ -381,6 +419,8 @@ func (db *DB) loadIndexFromDataFiles() error {
 		if i == len(db.fileIds)-1 {
 			db.activeFile.WriteOff = offset
 		}
+		//更新事务序列号
+		db.seqNo = curSeqNo
 	}
 	return nil
 }

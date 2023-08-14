@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 )
 
+const nonTransactionSeq uint64 = 0
+
 var txnFinKey = []byte("txn-Fin")
 
 //WriteBatch 原子批量写数据，保证原子性
@@ -146,4 +148,11 @@ func logRecordKeyWithSeq(key []byte, seqNo uint64) []byte {
 	//再拷贝进去具体的key值
 	copy(encKey[n:], key)
 	return encKey
+}
+
+//解析LogRecord的key，获取实际的key和事务
+func parseLogRecordKey(key []byte) ([]byte, uint64) {
+	seqNo, n := binary.Uvarint(key)
+	realKey := key[n:]
+	return realKey, seqNo
 }

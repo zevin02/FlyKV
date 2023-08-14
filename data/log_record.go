@@ -17,7 +17,8 @@ type LogRecordType = byte
 const (
 	// itoa 相当于0,往后进行枚举
 	//LogRecordNormal：正常写入
-	//Deleted:删除数据
+	//LogRecordDeleted:删除数据
+	//LogRecordTxnFinished :事务结束的标志
 
 	LogRecordNormal LogRecordType = iota
 	LogRecordDeleted
@@ -41,6 +42,12 @@ type LogRecord struct {
 	Key   []byte
 	Value []byte
 	Type  LogRecordType
+}
+
+//TransactionRecord 暂存的事务相关数据
+type TransactionRecord struct {
+	Record *LogRecord
+	Pos    *LogRecordPos
 }
 
 //对LogRecord进行编码,返回字节数组和字节数组的长度
