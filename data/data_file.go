@@ -28,7 +28,7 @@ type DataFile struct {
 
 //OpenDataFile 打开新的数据文件，作为一个新的活跃文件
 func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
-	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d%s", fileId, DataFileSuffix))
+	fileName := GetDataFileName(dirPath, fileId)
 	return newDataFile(fileName, fileId)
 }
 
@@ -56,6 +56,11 @@ func newDataFile(fileName string, fileId uint32) (*DataFile, error) {
 		WriteOff:  0,
 		IoManager: ioManager,
 	}, nil
+}
+
+func GetDataFileName(dirPath string, fileId uint32) string {
+	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d%s", fileId, DataFileSuffix))
+	return fileName
 }
 
 //ReadLogRecord 根据offset从数据文件中读取LogRecord

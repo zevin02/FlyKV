@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ type DB struct {
 	olderFile  map[uint32]*data.DataFile //旧的数据文件，用来读取
 	index      index.Indexer             //数据的内存索引
 	seqNo      uint64                    //事务序列号，全局递增
+	isMerging  bool                      //标识是否处在merge阶段
 }
 
 //Open 打开bitcask存储引擎实例
@@ -29,7 +31,7 @@ func Open(options Options) (*DB, error) {
 	if err := checkOptions(options); err != nil {
 		return nil, err
 	}
-	//判断目录是否存在，不存在就需要进行创建目录
+	//判断目录是否存在，不存在就需要进行创建目录,存在的话，就没有操作
 	if _, err := os.Stat(options.DirPath); os.IsNotExist(err) {
 		//创建目录
 		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
@@ -44,11 +46,23 @@ func Open(options Options) (*DB, error) {
 		olderFile: make(map[uint32]*data.DataFile),
 		index:     index.NewIndex(options.IndexType),
 		seqNo:     nonTransactionSeq,
+		isMerging: false,
 	}
-	//加载数据文件
+	//加载merge数据目录,将merge目录下的数据都移动过来
+	if err := db.loadMergeFiles(); err != nil {
+		return nil, err
+	}
+
+	//正常的在进行加载数据文件
 	if err := db.loadDataFile(); err != nil {
 		return nil, err
 	}
+
+	//从hint文件中加载索引
+	if err := db.loadIndexFromHintFile(); err != nil {
+		return nil, err
+	}
+
 	//从数据文件中加载索引
 	if err := db.loadIndexFromDataFiles(); err != nil {
 		return nil, err
@@ -236,14 +250,13 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	encRecord, size := data.EncodeLogRecord(logRecord)
 	//如果写入的数据已经达到了活跃文件的阈值，则关闭活跃文件（标记为旧文件），并打开新的活跃文件
 	if db.activeFile.WriteOff+size > db.options.FileSize {
-		//超过了阈值
-		//先进行持久化,保证数据都已经持久化到磁盘当中
+		//由于当前的活跃文件的大小超过了阈值，所以需要将该活跃文件先进行持久化到磁盘中
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
 		}
 		//设置进旧的文件集合中
 		db.olderFile[db.activeFile.FileId] = db.activeFile
-		//设置新的活跃文件
+		//再打开一个新的活跃文件
 		if err := db.setActiveDataFile(); err != nil {
 			return nil, err
 		}
@@ -347,6 +360,19 @@ func (db *DB) loadIndexFromDataFiles() error {
 	if len(db.fileIds) == 0 {
 		return nil
 	}
+	//查看是否发生过merge，如果发生过merge，我们前面已经在hint文件中加载了索引，这个id以前的我们都不需要进行构建索引
+	hashMerged, nonMergeFileId := false, uint32(0)
+	mergeFinFileName := filepath.Join(db.options.DirPath, data.MergeFinishedFileName)
+	if _, err := os.Stat(mergeFinFileName); err == nil {
+		//todo 前面加载merge数据目录如果发现了有merge操作，可以将mergeFileId保存起来，不用再多进行磁盘IO
+		nonMergeFileId, err = db.getNonMergeFileId(db.options.DirPath)
+		if err != nil {
+			return err
+		}
+		//说明merge存在,已完成
+		hashMerged = true
+	}
+
 	//更新内存索引
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
 		var ok bool
@@ -366,6 +392,10 @@ func (db *DB) loadIndexFromDataFiles() error {
 	//遍历所有的文件ID，处理文件中的记录
 	for i, fid := range db.fileIds {
 		var fileId = uint32(fid)
+		//如果比最近未参与merge的文件id小，说明已经从hint文件中加载了索引
+		if hashMerged && fileId < nonMergeFileId {
+			continue
+		}
 		var dataFile *data.DataFile
 		if fileId == db.activeFile.FileId {
 			//当前文件是活跃文件，就从活跃文件中获得
