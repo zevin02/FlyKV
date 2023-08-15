@@ -55,6 +55,7 @@ func (bt *BTree) Delete(key []byte) bool {
 	//会获得删除前的元素，来检查要删除的元素原来是否存在
 	oldItem := bt.tree.Delete(it)
 	bt.lock.Unlock()
+	//oldItem存在，则删除成功，否则就删除失败
 	if oldItem == nil {
 		return false
 	}

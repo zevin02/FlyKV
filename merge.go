@@ -144,6 +144,9 @@ func (db *DB) Merge() error {
 	//value中记录当前没有参与merge的文件id,后面方便读取
 	//因为merge使用的阈值和db是一样的，同时merge中写入的都是有效数据，所以文件的id一定比这个nonMergeFileId小
 
+	//merge过程中可能会没有完成（进程退出，系统崩溃等）重写后增加一个标识merge完成的文件
+	//重启的时候检查是否有merge目录，是否有merge完成的文件，存在就是与小merge，否则就是一个无效的merge操作
+
 	mergeFinRecord := &data.LogRecord{
 		Key:   []byte(mergeFinishedKey),
 		Value: []byte(strconv.Itoa(int(nonMergeFileId))),
