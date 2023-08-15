@@ -9,13 +9,17 @@ import (
 	"path/filepath"
 )
 
-const DataFileSuffix = ".data"
+const (
+	DataFileSuffix        = ".data"
+	HintFileName          = "hint-index" //里面存储的都是索引信息
+	MergeFinishedFileName = "merge-finished"
+)
 
 var (
 	ErrInvalidCrc = errors.New("invalid crc value,log record maybe error")
 )
 
-//数据文件
+// DataFile 数据文件
 type DataFile struct {
 	FileId    uint32        //文件ID
 	WriteOff  uint64        //文件写入到了哪个位置
@@ -25,6 +29,23 @@ type DataFile struct {
 //OpenDataFile 打开新的数据文件，作为一个新的活跃文件
 func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d%s", fileId, DataFileSuffix))
+	return newDataFile(fileName, fileId)
+}
+
+// OpenHintFile 打开一个hint文件在merge的时候
+func OpenHintFile(dirPath string) (*DataFile, error) {
+	fileName := filepath.Join(dirPath, HintFileName)
+	return newDataFile(fileName, 0)
+}
+
+// OpenMergeFinishedFile 打开一个merge完成的文件
+func OpenMergeFinishedFile(dirPath string) (*DataFile, error) {
+	fileName := filepath.Join(dirPath, MergeFinishedFileName)
+	return newDataFile(fileName, 0)
+}
+
+//生成datafile文件
+func newDataFile(fileName string, fileId uint32) (*DataFile, error) {
 	ioManager, err := fio.NewIOManager(fileName)
 	if err != nil {
 		return nil, err
@@ -103,6 +124,17 @@ func (df *DataFile) Write(buf []byte) error {
 	}
 	df.WriteOff += uint64(nByte) //更新当前文件写到哪个位置了
 	return nil
+}
+
+// WriteHintRecord 将位置索引信息写入到hint文件中
+func (df *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
+	//value是该key的位置信息
+	record := &LogRecord{
+		Key:   key,
+		Value: EncodeLogRecordPos(pos),
+	}
+	encRecord, _ := EncodeLogRecord(record)
+	return df.Write(encRecord)
 }
 
 func (df *DataFile) readNByte(n int64, offset uint64) (b []byte, err error) {
