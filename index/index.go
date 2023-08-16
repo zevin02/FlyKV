@@ -27,15 +27,18 @@ const (
 	Btree IndexType = iota
 	//ART自适应基数树
 	ART
+	BPT
 )
 
 //NewIndex 工厂函数，用来创建不同类新的索引
-func NewIndex(typ IndexType) Indexer {
+func NewIndex(typ IndexType, dirPath string) Indexer {
 	switch typ {
 	case Btree:
 		return NewBtree()
 	case ART:
-		return nil
+		return NewART()
+	case BPT:
+		return NewBPT(dirPath)
 	default:
 		panic("unsupported index type")
 	}
