@@ -2,6 +2,7 @@ package BitcaskDB
 
 import (
 	"BitcaskDB/data"
+	"BitcaskDB/utils"
 	"io"
 	"os"
 	"path"
@@ -27,7 +28,28 @@ func (db *DB) Merge() error {
 		db.mu.Unlock()
 		return ErrMergeIsProgress
 	}
+	//查看可以merge的数据量是否达到了阈值
+	totalSize, err := utils.DirSize(db.options.DirPath)
+	if err != nil {
+		db.mu.Unlock()
+		return err
+	}
+	if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
+		db.mu.Unlock()
+		return ErrMergeRatioUnReached
+	}
+	//查看剩余容量是否可以容纳merge之后的数据量
+	availableDiskSize, err := utils.AvailableDiskSize()
+	if err != nil {
+		db.mu.Unlock()
+		return err
+	}
+	if uint64(totalSize-db.reclaimSize) >= availableDiskSize {
+		db.mu.Unlock()
+		return ErrNoEnoughSpaceForMerge
+	}
 	//设置merge过程的标识
+
 	db.isMerging = true
 	defer func() {
 		//该过程退出的时候，进行资源清理，结束merge标识
@@ -158,7 +180,7 @@ func (db *DB) Merge() error {
 	if err := mergeFinishedFile.Sync(); err != nil {
 		return err
 	}
-
+	//TODO merge完需要将完成文件拷贝到正常目录下，并且重新构建索引
 	return nil
 }
 
@@ -196,6 +218,10 @@ func (db *DB) loadMergeFiles() error {
 		}
 		//merge时候将db关闭可能会生成一个事务序列号,这个对主数据库是没有用的
 		if entry.Name() == data.SeqNoFileName {
+			continue
+		}
+		//在merge的时候会打开一个新的DB，所以会生成一个文件锁，这个文件锁不需要拷贝到新目录中
+		if entry.Name() == fileFlockName {
 			continue
 		}
 		mergeFileNames = append(mergeFileNames, entry.Name()) //将merge中用到的文件名保存起来,供后续转移

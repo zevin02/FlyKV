@@ -11,12 +11,12 @@ import (
 //Indexer 定义一个抽象索引接口(内存索引)
 //Get拿到索引的位置信息
 type Indexer interface {
-	//Put 向索引中添加key对应的位置信息
-	Put(key []byte, pos *data.LogRecordPos) bool
+	//Put 向索引中添加key对应的位置信息,并且将旧的数据返回出去
+	Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos
 	//Get 根据Key获得相应的位置信息
 	Get(key []byte) *data.LogRecordPos
-	//Delete 根据key在位置数据
-	Delete(key []byte) bool
+	//Delete 根据key删除位置数据，并且将旧的数据返回出去
+	Delete(key []byte) (*data.LogRecordPos, bool)
 	//Iterator 索引迭代器
 	Iterator(reverse bool) Iterator
 	//Size 索引中保存的数据个数

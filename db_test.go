@@ -277,7 +277,7 @@ func TestDB_Sync(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func Test_FileLock(t *testing.T) {
+func TestDB_FileLock(t *testing.T) {
 	opts := DefaultOperations
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -296,6 +296,29 @@ func Test_FileLock(t *testing.T) {
 	assert.Nil(t, db2.Close())
 	defer destroyDB(db2)
 
+}
+
+func TestDB_Stat(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 32 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	for i := 0; i < 1000000; i++ {
+		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+		assert.Nil(t, err)
+	}
+	for i := 0; i < 1000000; i++ {
+		err = db.Delete(utils.GetTestKey(i))
+		assert.Nil(t, err)
+	}
+	for i := 100; i < 2000; i++ {
+		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+		assert.Nil(t, err)
+	}
+	assert.NotNil(t, db.Stat())
+	//t.Log(stat)
 }
 
 //func TestOpen2(t *testing.T) {

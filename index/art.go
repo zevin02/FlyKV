@@ -23,11 +23,15 @@ func NewART() *AdaptiveRadixTree {
 	}
 }
 
-func (art *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) bool {
+func (art *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	art.lock.Lock()
-	art.tree.Insert(key, pos) //这里的value是type Value interface{}，可以存储任何类型
+	oldItem, _ := art.tree.Insert(key, pos) //这里的value是type Value interface{}，可以存储任何类型
 	art.lock.Unlock()
-	return true
+	if oldItem == nil {
+		return nil
+	}
+
+	return oldItem.(*data.LogRecordPos)
 }
 
 func (art *AdaptiveRadixTree) Get(key []byte) *data.LogRecordPos {
@@ -40,13 +44,16 @@ func (art *AdaptiveRadixTree) Get(key []byte) *data.LogRecordPos {
 	return value.(*data.LogRecordPos) //我们需要强转为我们需要的类型
 }
 
-func (art *AdaptiveRadixTree) Delete(key []byte) bool {
+func (art *AdaptiveRadixTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 	art.lock.Lock()
 	//key存在并且删除成功，deleted=true
 	//key不存在则删除失败，deleted=false
-	_, deleted := art.tree.Delete(key)
+	value, deleted := art.tree.Delete(key)
 	art.lock.Unlock()
-	return deleted
+	if value == nil {
+		return nil, false
+	}
+	return value.(*data.LogRecordPos), deleted
 }
 
 func (art *AdaptiveRadixTree) Size() int {

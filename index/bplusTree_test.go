@@ -11,16 +11,19 @@ import (
 const DirPath = "/home/zevin/githubmanage/program/BitcaskDB/tmp"
 
 func TestBPlusTree_Put(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "bptree-put")
+	path := filepath.Join(DirPath, "bptree-put")
 	os.MkdirAll(path, os.ModePerm)
 
 	defer func() {
 		_ = os.RemoveAll(DirPath)
 	}()
 	tree := NewBPT(path, false)
-	tree.Put([]byte("aac"), &data.LogRecordPos{123, 9999})
+	res1 := tree.Put([]byte("aac"), &data.LogRecordPos{123, 9999})
+	assert.Nil(t, res1)
 	tree.Put([]byte("abc"), &data.LogRecordPos{123, 9999})
-	tree.Put([]byte("acc"), &data.LogRecordPos{123, 9999})
+	res2 := tree.Put([]byte("aac"), &data.LogRecordPos{123, 99})
+	assert.Equal(t, uint32(123), res2.Fid)
+	assert.Equal(t, uint64(9999), res2.Offset)
 
 }
 
@@ -51,11 +54,16 @@ func TestBPlusTree_Delete(t *testing.T) {
 		_ = os.RemoveAll(DirPath)
 	}()
 	tree := NewBPT(path, false)
-	assert.False(t, tree.Delete([]byte("no-exist")))
-	tree.Put([]byte("aac"), &data.LogRecordPos{123, 9999})
-	tree.Put([]byte("abc"), &data.LogRecordPos{1231, 9999})
-	tree.Put([]byte("acc"), &data.LogRecordPos{1232, 9999})
-	assert.True(t, tree.Delete([]byte("aac")))
+	res1, ok1 := tree.Delete([]byte("no-exist"))
+	assert.False(t, ok1)
+	assert.Nil(t, res1)
+	tree.Put([]byte("aac"), &data.LogRecordPos{Fid: 123, Offset: 9999})
+	tree.Put([]byte("abc"), &data.LogRecordPos{Fid: 1231, Offset: 9999})
+	tree.Put([]byte("acc"), &data.LogRecordPos{Fid: 1232, Offset: 9999})
+	res2, ok2 := tree.Delete([]byte("aac"))
+	assert.True(t, ok2)
+	assert.Equal(t, uint32(123), res2.Fid)
+	assert.Equal(t, uint64(9999), res2.Offset)
 	assert.Nil(t, tree.Get([]byte("aac")))
 }
 

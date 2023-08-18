@@ -7,8 +7,9 @@ type Options struct {
 	IndexType   IndexType //索引类型
 	BytePerSync uint64    //累积写了多少字节后进行持久化
 	//TODO 添加后台线程来处理
-	TimeSync      uint //每隔多少秒就进行一次持久化
-	MMapAtStartup bool //在启动的时候使用使用mmap来加载
+	TimeSync           uint    //每隔多少秒就进行一次持久化
+	MMapAtStartup      bool    //在启动的时候使用使用mmap来加载
+	DataFileMergeRatio float32 //数据文件的无效数据达到多少的数据文件多少比例进行merge的阈值
 }
 
 type IndexType = int8
@@ -23,13 +24,14 @@ const (
 )
 
 var DefaultOperations = Options{
-	DirPath:       string("/home/zevin/githubmanage/program/BitcaskDB/storefile"),
-	FileSize:      256 * 1024 * 1024, //256MB
-	SyncWrite:     false,
-	IndexType:     Btree,
-	BytePerSync:   0,
-	TimeSync:      0,
-	MMapAtStartup: true,
+	DirPath:            string("/home/zevin/githubmanage/program/BitcaskDB/storefile"),
+	FileSize:           256 * 1024 * 1024, //256MB
+	SyncWrite:          false,
+	IndexType:          Btree,
+	BytePerSync:        0,
+	TimeSync:           0,
+	MMapAtStartup:      true,
+	DataFileMergeRatio: 0.5,
 }
 
 //IteratorOptions 索引迭代器的配置项

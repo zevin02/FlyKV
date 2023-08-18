@@ -10,11 +10,15 @@ func TestBTree_Put(t *testing.T) {
 	bt := NewBtree()
 	//插入一个边界数据
 	res := bt.Put(nil, &data.LogRecordPos{Fid: 1, Offset: 100})
-
-	assert.True(t, res)
+	//前面没有数据，所以旧的数据应该是空
+	assert.Nil(t, res)
 
 	res2 := bt.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 2})
-	assert.True(t, res2)
+	assert.Nil(t, res2)
+	res3 := bt.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 3})
+	assert.NotNil(t, res3)
+	assert.Equal(t, uint32(1), res3.Fid)
+	assert.Equal(t, uint64(2), res3.Offset)
 
 }
 
@@ -22,7 +26,7 @@ func TestBTree_Get(t *testing.T) {
 	bt := NewBtree()
 	//插入一个边界数据
 	res := bt.Put(nil, &data.LogRecordPos{Fid: 1, Offset: 100})
-	assert.True(t, res)
+	assert.Nil(t, res)
 	//测试key=nil获得相应的数据
 	pos1 := bt.Get(nil)
 	assert.Equal(t, uint32(1), pos1.Fid)
@@ -30,9 +34,10 @@ func TestBTree_Get(t *testing.T) {
 
 	//测试对一个key的重复使用获得的数据
 	res2 := bt.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 2})
-	assert.True(t, res2)
+	assert.Nil(t, res2)
 	res3 := bt.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 3})
-	assert.True(t, res3)
+	assert.Equal(t, uint32(1), res3.Fid)
+	assert.Equal(t, uint64(2), res3.Offset)
 	pos2 := bt.Get([]byte("a"))
 	assert.Equal(t, uint32(1), pos2.Fid)
 	assert.Equal(t, uint64(3), pos2.Offset)
@@ -42,16 +47,18 @@ func TestBTree_Get(t *testing.T) {
 func TestBTree_Delete(t *testing.T) {
 	bt := NewBtree()
 	res1 := bt.Put(nil, &data.LogRecordPos{Fid: 1, Offset: 100})
-	assert.True(t, res1)
+	assert.Nil(t, res1)
 	//删除一个nil对象
-	res2 := bt.Delete(nil)
-	assert.True(t, res2)
+	_, ok1 := bt.Delete(nil)
+	assert.True(t, ok1)
 
 	res3 := bt.Put([]byte("aaa"), &data.LogRecordPos{Fid: 22, Offset: 33})
-	assert.True(t, res3)
+	assert.Nil(t, res3)
 	//删除一个aaa对象
-	res4 := bt.Delete([]byte("aaa"))
-	assert.True(t, res4)
+	res4, ok2 := bt.Delete([]byte("aaa"))
+	assert.True(t, ok2)
+	assert.Equal(t, uint32(22), res4.Fid)
+	assert.Equal(t, uint64(33), res4.Offset)
 
 }
 

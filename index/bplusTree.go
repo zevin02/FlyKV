@@ -37,17 +37,22 @@ func NewBPT(dirPath string, syncWrite bool) *BPlusTree {
 }
 
 // Put 将位置索引存储在磁盘中
-func (bpt *BPlusTree) Put(key []byte, pos *data.LogRecordPos) bool {
-
+func (bpt *BPlusTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
+	var oldValue []byte
 	if err := bpt.tree.Update(func(tx *bbolt.Tx) error {
 		//拿到我们前面定义的bucket，并将key and value进行编码存入磁盘
 		bucket := tx.Bucket(indexBucketName)
+		//先根据key获得之前的数据
+		oldValue = bucket.Get(key)
 		return bucket.Put(key, data.EncodeLogRecordPos(pos))
 
 	}); err != nil {
 		panic("fail to put value in bptree")
 	}
-	return true
+	if len(oldValue) == 0 {
+		return nil
+	}
+	return data.DecodeLogRecordPos(oldValue)
 }
 
 //Get 根据Key获得相应的位置信息
@@ -69,22 +74,24 @@ func (bpt *BPlusTree) Get(key []byte) *data.LogRecordPos {
 }
 
 //Delete 根据key在位置数据
-func (bpt *BPlusTree) Delete(key []byte) bool {
-	var ok bool
+func (bpt *BPlusTree) Delete(key []byte) (*data.LogRecordPos, bool) {
+	var oldVal []byte //获取旧的数据
 	if err := bpt.tree.Update(func(tx *bbolt.Tx) error {
-
 		bucket := tx.Bucket(indexBucketName)
 		//先判断是否存在
-		value := bucket.Get(key)
-		if len(value) != 0 {
-			ok = true
+		if oldVal = bucket.Get(key); len(oldVal) != 0 {
 			return bucket.Delete(key)
 		}
 		return nil
 	}); err != nil {
 		panic("fail to delete value in bptree")
 	}
-	return ok
+	if len(oldVal) == 0 {
+		//没有旧的数据，删除失败
+		return nil, false
+	}
+	//得到了旧的数据，删除成功
+	return data.DecodeLogRecordPos(oldVal), true
 }
 
 //Iterator 索引迭代器

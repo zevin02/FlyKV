@@ -28,13 +28,16 @@ func (bt *BTree) Size() int {
 }
 
 //给BTRee实现这些接口，主要是调用BTree的一些功能和相关的方法
-func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) bool {
+func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	it := &Item{key: key, pos: pos} //构造数据进行插入，获得指针
 	bt.lock.Lock()
 
-	bt.tree.ReplaceOrInsert(it)
+	oldItem := bt.tree.ReplaceOrInsert(it)
 	bt.lock.Unlock()
-	return true
+	if oldItem == nil {
+		return nil
+	}
+	return oldItem.(*Item).pos
 }
 
 func (bt *BTree) Get(key []byte) *data.LogRecordPos {
@@ -49,7 +52,7 @@ func (bt *BTree) Get(key []byte) *data.LogRecordPos {
 	return btreeItem.(*Item).pos
 }
 
-func (bt *BTree) Delete(key []byte) bool {
+func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 	it := &Item{key: key}
 	bt.lock.Lock()
 	//会获得删除前的元素，来检查要删除的元素原来是否存在
@@ -57,9 +60,9 @@ func (bt *BTree) Delete(key []byte) bool {
 	bt.lock.Unlock()
 	//oldItem存在，则删除成功，否则就删除失败
 	if oldItem == nil {
-		return false
+		return nil, false
 	}
-	return true
+	return oldItem.(*Item).pos, true
 
 }
 

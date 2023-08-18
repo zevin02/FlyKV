@@ -9,6 +9,7 @@ import (
 type LogRecordPos struct {
 	Fid    uint32 //文件ID，该数据存储在哪个文件中
 	Offset uint64 //偏移，数据存储到数据文件的哪个位置
+	Size   uint32 //该数据存储在磁盘中的大小
 }
 
 //将Logrecordtype等价于byte类型，增加可读性质
@@ -80,10 +81,12 @@ func EncodeLogRecord(logRecord *LogRecord) ([]byte, uint64) {
 
 // EncodeLogRecordPos 将位置信息进行编码
 func EncodeLogRecordPos(pos *LogRecordPos) []byte {
-	buf := make([]byte, binary.MaxVarintLen64+binary.MaxVarintLen32)
+	buf := make([]byte, binary.MaxVarintLen64+binary.MaxVarintLen32*2)
 	var index = 0
 	index += binary.PutVarint(buf[index:], int64(pos.Fid))
 	index += binary.PutVarint(buf[index:], int64(pos.Offset))
+	index += binary.PutVarint(buf[index:], int64(pos.Size))
+
 	return buf[:index]
 }
 
@@ -93,9 +96,12 @@ func DecodeLogRecordPos(buf []byte) *LogRecordPos {
 	index += n
 	offset, n := binary.Varint(buf[index:])
 	index += n
+	size, n := binary.Varint(buf[index:])
+	index += n
 	return &LogRecordPos{
 		Fid:    uint32(fileId),
 		Offset: uint64(offset),
+		Size:   uint32(size),
 	}
 }
 
