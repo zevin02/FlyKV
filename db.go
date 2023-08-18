@@ -31,6 +31,7 @@ type DB struct {
 	seqNoFileExists        bool                      //存储事务序列号的文件是否存在
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
 	fileLock               *flock.Flock              //当前进程持有的文件锁,保证多进程之间互斥
+	ByteWritten            uint64                    //累积写了多少的字节
 }
 
 //Open 打开bitcask存储引擎实例
@@ -334,8 +335,15 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 		return nil, err
 	}
 
+	db.ByteWritten += size
+
 	//判断是否需要对数据进行安全的持久化操作
-	if db.options.SyncWrite {
+	var needSync bool = db.options.SyncWrite
+	//写入的字节数到达用户要求的perSync的倍数就要进行持久化操作
+	if !needSync && db.options.BytePerSync > 0 && (db.ByteWritten%db.options.BytePerSync == 0) {
+		needSync = true
+	}
+	if needSync {
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
 		}
