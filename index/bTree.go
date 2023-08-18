@@ -72,6 +72,10 @@ func (bt *BTree) Iterator(reverse bool) Iterator {
 	return newBtreeIterator(bt.tree, reverse)
 }
 
+func (bt *BTree) Close() error {
+	return nil
+}
+
 //定义一个BTree的索引迭代器
 type btreeIterator struct {
 	currIndex int     //遍历到数组的哪一个下标

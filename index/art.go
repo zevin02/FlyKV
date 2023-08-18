@@ -65,6 +65,10 @@ func (art *AdaptiveRadixTree) Iterator(reverse bool) Iterator {
 	return newARTIterator(art.tree, reverse)
 }
 
+func (art *AdaptiveRadixTree) Close() error {
+	return nil
+}
+
 //定义一个ART的索引迭代器
 type artIterator struct {
 	currIndex int     //遍历到数组的哪一个下标

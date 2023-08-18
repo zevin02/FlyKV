@@ -16,10 +16,11 @@ type BPlusTree struct {
 	tree *bbolt.DB //内部封转了锁，可以实现并发访问
 }
 
-func NewBPT(dirPath string) *BPlusTree {
+func NewBPT(dirPath string, syncWrite bool) *BPlusTree {
 	//打开一个文件来存储这些数据,先保证这个目录是存在的
-
-	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, nil)
+	opts := bbolt.DefaultOptions
+	opts.NoSync = !syncWrite
+	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, opts)
 	if err != nil {
 		return nil
 	}
@@ -103,6 +104,10 @@ func (bpt *BPlusTree) Size() int {
 	return size
 }
 
+func (bpt *BPlusTree) Close() error {
+	return bpt.tree.Close()
+}
+
 type bptreeIterator struct {
 	tx      *bbolt.Tx
 	cursor  *bbolt.Cursor //游标，使用这个就可以进行迭代
@@ -137,15 +142,15 @@ func (bpi *bptreeIterator) Rewind() {
 
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (bpi *bptreeIterator) Seek(key []byte) {
-	bpi.cursor.Seek(key)
+	bpi.currKey, bpi.currVal = bpi.cursor.Seek(key)
 }
 
 //Next 跳转到下一个key
 func (bpi *bptreeIterator) Next() {
 	if bpi.reverse {
-		bpi.currKey, bpi.currVal = bpi.cursor.Next()
-	} else {
 		bpi.currKey, bpi.currVal = bpi.cursor.Prev()
+	} else {
+		bpi.currKey, bpi.currVal = bpi.cursor.Next()
 	}
 }
 
@@ -161,11 +166,11 @@ func (bpi *bptreeIterator) Key() []byte {
 
 //Value 当前遍历位置的value数据
 func (bpi *bptreeIterator) Value() *data.LogRecordPos {
-	return bpi.Value()
+	return data.DecodeLogRecordPos(bpi.currVal)
 }
 
 //Close 关闭迭代器，释放相应的资源
 func (bpi *bptreeIterator) Close() {
 	//将事务进行提交
-	bpi.tx.Commit()
+	_ = bpi.tx.Rollback()
 }

@@ -19,6 +19,8 @@ type Indexer interface {
 	Iterator(reverse bool) Iterator
 	//Size 索引中保存的数据个数
 	Size() int
+	//Close 关闭索引
+	Close() error
 }
 type IndexType = int8
 
@@ -31,14 +33,14 @@ const (
 )
 
 //NewIndex 工厂函数，用来创建不同类新的索引
-func NewIndex(typ IndexType, dirPath string) Indexer {
+func NewIndex(typ IndexType, dirPath string, sync bool) Indexer {
 	switch typ {
 	case Btree:
 		return NewBtree()
 	case ART:
 		return NewART()
 	case BPT:
-		return NewBPT(dirPath)
+		return NewBPT(dirPath, sync)
 	default:
 		panic("unsupported index type")
 	}

@@ -12,7 +12,7 @@ func TestAdaptiveRadixTree_Put(t *testing.T) {
 	art.Put([]byte("key-2"), &data.LogRecordPos{Fid: 1, Offset: 12})
 	art.Put([]byte("key-3"), &data.LogRecordPos{Fid: 1, Offset: 12})
 	pos := art.Get([]byte("key-1"))
-	t.Log(pos.Fid, pos.Offset)
+	assert.NotNil(t, pos)
 }
 
 func TestAdaptiveRadixTree_Get(t *testing.T) {
