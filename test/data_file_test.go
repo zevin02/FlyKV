@@ -2,6 +2,7 @@ package test
 
 import (
 	"BitcaskDB/data"
+	"BitcaskDB/fio"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -10,15 +11,15 @@ import (
 func TestOpenDataFile(t *testing.T) {
 	//打开一个数据活跃文件
 
-	df1, err := data.OpenDataFile(DirPath, 0)
+	df1, err := data.OpenDataFile(DirPath, 0, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 
-	df2, err := data.OpenDataFile(DirPath, 1)
+	df2, err := data.OpenDataFile(DirPath, 1, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df2)
 	//重复的打开同一个文件
-	df3, err := data.OpenDataFile(DirPath, 1)
+	df3, err := data.OpenDataFile(DirPath, 1, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df3)
 
@@ -26,7 +27,7 @@ func TestOpenDataFile(t *testing.T) {
 
 func TestDataFile_Write(t *testing.T) {
 	//打开文件
-	df1, err := data.OpenDataFile(DirPath, 0)
+	df1, err := data.OpenDataFile(DirPath, 0, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 	//写入数据
@@ -39,7 +40,7 @@ func TestDataFile_Write(t *testing.T) {
 }
 
 func TestDataFile_Close(t *testing.T) {
-	df1, err := data.OpenDataFile(DirPath, 12)
+	df1, err := data.OpenDataFile(DirPath, 12, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 
@@ -50,7 +51,7 @@ func TestDataFile_Close(t *testing.T) {
 }
 
 func TestDataFile_Sync(t *testing.T) {
-	df1, err := data.OpenDataFile(DirPath, 123)
+	df1, err := data.OpenDataFile(DirPath, 123, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 
@@ -61,7 +62,7 @@ func TestDataFile_Sync(t *testing.T) {
 }
 
 func TestDataFile_ReadLogRecord(t *testing.T) {
-	df1, err := data.OpenDataFile(DirPath, 1111)
+	df1, err := data.OpenDataFile(DirPath, 1111, fio.StanderFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 	//只有一条logrecord

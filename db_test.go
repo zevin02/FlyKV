@@ -297,3 +297,18 @@ func Test_FileLock(t *testing.T) {
 	defer destroyDB(db2)
 
 }
+
+//func TestOpen2(t *testing.T) {
+//	opts := DefaultOperations
+//	opts.FileSize = 64 * 1024 * 1024
+//	opts.MMapAtStartup = true
+//	ti := time.Now()
+//	Open(opts)
+//	t.Log("open time", time.Since(ti))
+//
+//	//for i := 100; i < 1000000; i++ {
+//	//	err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+//	//	assert.Nil(t, err)
+//	//}
+//
+//}

@@ -26,7 +26,6 @@ func TestDB_WriteBatch1(t *testing.T) {
 	assert.Nil(t, err)
 	val1, err := db.Get(utils.GetTestKey(1))
 	assert.NotNil(t, val1)
-	t.Log(val1)
 	assert.Nil(t, err)
 
 	//删除有效数据
@@ -37,9 +36,7 @@ func TestDB_WriteBatch1(t *testing.T) {
 	assert.Nil(t, err)
 
 	val2, err := db.Get(utils.GetTestKey(1))
-	t.Log(val2)
-	t.Log(err)
-
+	assert.Nil(t, val2)
 }
 
 //

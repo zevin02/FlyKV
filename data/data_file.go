@@ -28,32 +28,32 @@ type DataFile struct {
 }
 
 //OpenDataFile 打开新的数据文件，作为一个新的活跃文件
-func OpenDataFile(dirPath string, fileId uint32) (*DataFile, error) {
+func OpenDataFile(dirPath string, fileId uint32, managerType fio.IOManagerType) (*DataFile, error) {
 	fileName := GetDataFileName(dirPath, fileId)
-	return newDataFile(fileName, fileId)
+	return newDataFile(fileName, fileId, managerType)
 }
 
 // OpenHintFile 打开一个hint文件在merge的时候
 func OpenHintFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, HintFileName)
-	return newDataFile(fileName, 0)
+	return newDataFile(fileName, 0, fio.StanderFIO)
 }
 
 // OpenMergeFinishedFile 打开一个merge完成的文件
 func OpenMergeFinishedFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, MergeFinishedFileName)
-	return newDataFile(fileName, 0)
+	return newDataFile(fileName, 0, fio.StanderFIO)
 }
 
 // OpenSeqNoFile 打开一个merge完成的文件
 func OpenSeqNoFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, SeqNoFileName)
-	return newDataFile(fileName, 0)
+	return newDataFile(fileName, 0, fio.StanderFIO)
 }
 
 //生成datafile文件
-func newDataFile(fileName string, fileId uint32) (*DataFile, error) {
-	ioManager, err := fio.NewIOManager(fileName)
+func newDataFile(fileName string, fileId uint32, ioType fio.IOManagerType) (*DataFile, error) {
+	ioManager, err := fio.NewIOManager(fileName, ioType)
 	if err != nil {
 		return nil, err
 	}
@@ -160,4 +160,16 @@ func (df *DataFile) readNByte(n int64, offset uint64) (b []byte, err error) {
 
 func (df *DataFile) Close() error {
 	return df.IoManager.Close()
+}
+
+func (df *DataFile) SetIOManager(dirPath string, ioType fio.IOManagerType) error {
+	if err := df.IoManager.Close(); err != nil {
+		return err
+	}
+	IOmanager, err := fio.NewIOManager(GetDataFileName(dirPath, df.FileId), ioType)
+	if err != nil {
+		return err
+	}
+	df.IoManager = IOmanager
+	return nil
 }

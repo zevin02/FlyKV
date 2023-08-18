@@ -3,6 +3,12 @@ package fio
 const DataFilePerm = 0644
 
 //我们封装IOmanager方便后续添加不同的IO类型
+type IOManagerType = byte
+
+const (
+	StanderFIO IOManagerType = iota
+	MMapFio
+)
 
 type IOManager interface {
 	//Read 从文件的给定位置读取对应的数据到b，返回读取的字符数
@@ -20,6 +26,14 @@ type IOManager interface {
 }
 
 // NewIOManager 初始化IOManger,目前只有一个FileIO
-func NewIOManager(filename string) (IOManager, error) {
-	return NewFileIOManager(filename)
+func NewIOManager(filename string, typ IOManagerType) (IOManager, error) {
+	switch typ {
+	case StanderFIO:
+		return NewFileIOManager(filename)
+	case MMapFio:
+		return NewMMapIOManager(filename)
+	default:
+		panic("unsupport iomanager type")
+	}
+
 }

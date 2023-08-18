@@ -2,6 +2,7 @@ package BitcaskDB
 
 import (
 	"BitcaskDB/data"
+	"BitcaskDB/fio"
 	"BitcaskDB/index"
 	"github.com/gofrs/flock"
 	"io"
@@ -92,6 +93,11 @@ func Open(options Options) (*DB, error) {
 		//从数据文件中加载索引
 		if err := db.loadIndexFromDataFiles(); err != nil {
 			return nil, err
+		}
+
+		if db.options.MMapAtStartup {
+			//如果使用MMap加速启动的话，active文件是只读不能写的，所以我们需要设置成标准文件类型
+			db.setIoManger(fio.StanderFIO)
 		}
 
 	}
@@ -364,7 +370,8 @@ func (db *DB) setActiveDataFile() error {
 	if db.activeFile != nil {
 		initialFileId = db.activeFile.FileId + 1
 	}
-	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId) //打开一个新的活跃文件用于读写
+	//这个地方打开的文件需要使用标准IO的
+	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId, fio.StanderFIO) //打开一个新的活跃文件用于读写
 	if err != nil {
 		return err
 	}
@@ -412,7 +419,12 @@ func (db *DB) loadDataFile() error {
 
 	//遍历每个文件ID，打开对应的数据文件
 	for i, fid := range fileIds {
-		dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid))
+		ioType := fio.StanderFIO
+		if db.options.MMapAtStartup {
+			//在启动的使用Mmap加速读取文件来构建索引
+			ioType = fio.MMapFio
+		}
+		dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid), ioType)
 		if err != nil {
 			return err
 		}
@@ -554,4 +566,19 @@ func (db *DB) loadSeqNo() error {
 	db.seqNoFileExists = true
 	//加载完我们就需要将这个文件删除，避免追加写，我们对于这个文件只需要一条数据即可
 	return os.Remove(fileName)
+}
+
+func (db *DB) setIoManger(managerType fio.IOManagerType) error {
+	if db.activeFile == nil {
+		return nil
+	}
+	if err := db.activeFile.SetIOManager(db.options.DirPath, managerType); err != nil {
+		return err
+	}
+	for _, datafile := range db.olderFile {
+		if err := datafile.SetIOManager(db.options.DirPath, managerType); err != nil {
+			return err
+		}
+	}
+	return nil
 }
