@@ -12,8 +12,10 @@ type IndexType = int8
 const (
 	//Btree 索引
 	Btree IndexType = iota
-	//ART 自适应基数树
+	//ART 自适应基数树索引
 	ART
+	//B+树索引
+	BPT
 )
 
 var DefaultOperations = Options{

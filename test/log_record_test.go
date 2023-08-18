@@ -28,7 +28,6 @@ func TestEncodeLogRecord(t *testing.T) {
 	assert.NotNil(t, res1)
 	//crc+type=5
 	assert.Greater(t, n1, uint64(5))
-	t.Log(res1)
 
 	//类型为deleted
 	logRecord = &data.LogRecord{
@@ -40,7 +39,6 @@ func TestEncodeLogRecord(t *testing.T) {
 	assert.NotNil(t, res1)
 	//crc+type=5
 	assert.Greater(t, n1, uint64(5))
-	t.Log(res1)
 
 }
 

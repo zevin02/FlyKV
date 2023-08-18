@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+//迭代器使用完需要关闭掉
 func TestDB_NewIterator_One_Value(t *testing.T) {
 	opts := DefaultOperations
 	db, err := Open(opts)
@@ -17,6 +18,7 @@ func TestDB_NewIterator_One_Value(t *testing.T) {
 	assert.Nil(t, err)
 
 	iter := db.NewIterator(DefaultIteratorOptions)
+	defer iter.Close()
 	assert.NotNil(t, iter)
 	assert.Equal(t, true, iter.Valid())
 	assert.Equal(t, utils.GetTestKey(10), iter.Key())
@@ -42,6 +44,7 @@ func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	err = db.Put([]byte("ssnde"), utils.RandomValue(10))
 	assert.Nil(t, err)
 	iter := db.NewIterator(DefaultIteratorOptions)
+	defer iter.Close()
 	assert.NotNil(t, iter)
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		assert.NotNil(t, iter.Key())
@@ -55,6 +58,7 @@ func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	opts1.Reverse = true
 	opts1.Prefix = []byte("ss")
 	iter1 := db.NewIterator(opts1)
+	defer iter.Close()
 	assert.NotNil(t, iter)
 	for iter1.Rewind(); iter1.Valid(); iter1.Next() {
 		assert.NotNil(t, iter1.Key())

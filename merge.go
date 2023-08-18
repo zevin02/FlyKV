@@ -194,6 +194,10 @@ func (db *DB) loadMergeFiles() error {
 			//标识merge结束的文件存在，就标识merge完成了
 			mergeFinished = true
 		}
+		//merge时候将db关闭可能会生成一个事务序列号,这个对主数据库是没有用的
+		if entry.Name() == data.SeqNoFileName {
+			continue
+		}
 		mergeFileNames = append(mergeFileNames, entry.Name()) //将merge中用到的文件名保存起来,供后续转移
 	}
 	//没有merge完成，直接返回
