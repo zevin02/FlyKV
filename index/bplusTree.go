@@ -36,6 +36,7 @@ func NewBPT(dirPath string, syncWrite bool) *BPlusTree {
 	}
 }
 
+// Put 将位置索引存储在磁盘中
 func (bpt *BPlusTree) Put(key []byte, pos *data.LogRecordPos) bool {
 
 	if err := bpt.tree.Update(func(tx *bbolt.Tx) error {

@@ -266,7 +266,7 @@ func (db *DB) loadIndexFromHintFile() error {
 	if err != nil {
 		return err
 	}
-	//hint中都是有效数据,读取数据文件
+	//hint中都是有效数据,读取数据文件,从磁盘中读取数据到内存中构建内存的索引
 	var offset uint64 = 0
 	for {
 		record, size, err := hintFile.ReadLogRecord(offset)

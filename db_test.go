@@ -276,3 +276,24 @@ func TestDB_Sync(t *testing.T) {
 	err = db.Sync()
 	assert.Nil(t, err)
 }
+
+func Test_FileLock(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	//重复打开
+	db2, err := Open(opts)
+	assert.Nil(t, db2)
+	assert.Equal(t, ErrDataBaseIsUsing, err)
+
+	assert.Nil(t, db.Close())
+	db2, err = Open(opts)
+	assert.Nil(t, err)
+	assert.NotNil(t, db2)
+	assert.Nil(t, db2.Close())
+	defer destroyDB(db2)
+
+}

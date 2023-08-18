@@ -3,6 +3,7 @@ package BitcaskDB
 import (
 	"BitcaskDB/data"
 	"BitcaskDB/index"
+	"github.com/gofrs/flock"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,20 +13,24 @@ import (
 	"sync"
 )
 
-const seqNoKey = "seqNoKey"
+const (
+	seqNoKey      = "seqNoKey"
+	fileFlockName = "fileFlcok"
+)
 
 //DB Bitcask存储引擎的实例
 type DB struct {
 	fileIds                []int   //文件ID，只能在加载索引的时候使用
 	options                Options //配置信息
 	mu                     *sync.RWMutex
-	activeFile             *data.DataFile            //当前活跃文件，可以用来写入
+	activeFile             *data.DataFile            //当前活跃文件，可以用来写入,在loaddatafile的时候，活跃文件和老文件都会被初始化
 	olderFile              map[uint32]*data.DataFile //旧的数据文件，用来读取
 	index                  index.Indexer             //数据的内存索引
 	seqNo                  uint64                    //事务序列号，全局递增
 	isMerging              bool                      //标识是否处在merge阶段
 	seqNoFileExists        bool                      //存储事务序列号的文件是否存在
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
+	fileLock               *flock.Flock              //当前进程持有的文件锁,保证多进程之间互斥
 }
 
 //Open 打开bitcask存储引擎实例
@@ -44,15 +49,26 @@ func Open(options Options) (*DB, error) {
 		}
 	}
 
+	//判断当前的数据目录是否正在被使用，一个进程实例只能对应一个目录
+	fileFlock := flock.New(filepath.Join(options.DirPath, fileFlockName))
+	hold, err := fileFlock.TryLock()
+	if err != nil {
+		return nil, err
+	}
+	if !hold {
+		//没有获得锁，说明这个锁被其他进程给使用了
+		return nil, ErrDataBaseIsUsing
+	}
 	//初始化DB的实例，并对数据结构进行初始化
 	db := &DB{
 		options:                options,
 		mu:                     new(sync.RWMutex),
 		olderFile:              make(map[uint32]*data.DataFile),
-		index:                  index.NewIndex(options.IndexType, options.DirPath, options.SyncWrite),
+		index:                  index.NewIndex(options.IndexType, options.DirPath, options.SyncWrite), //初始化内存索引
 		seqNo:                  nonTransactionSeq,
 		isMerging:              false,
 		isInitialDBInitialized: isInitial,
+		fileLock:               fileFlock,
 	}
 	//加载merge数据目录,将merge目录下的数据都移动过来
 	if err := db.loadMergeFiles(); err != nil {
@@ -78,7 +94,7 @@ func Open(options Options) (*DB, error) {
 		}
 
 	}
-	//b+树是把索引存储在磁盘中,取出当前的事务号
+	//b+树是把索引存储在磁盘中,所以不需要把数据读取到内存中，需要的时候读取即可,取出当前的事务号
 	if options.IndexType == BPT {
 		//加载事务序列号
 		if err := db.loadSeqNo(); err != nil {
@@ -110,7 +126,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	if err != nil {
 		return err
 	}
-	//获得索引信息，更新内存索引
+	//获得索引信息，更新内存索引,内存索引中的key就是用户的key，没有进行任何的编码
 	if ok := db.index.Put(key, pos); !ok {
 		return ErrIndexUpdateFailed
 	}
@@ -225,8 +241,13 @@ func (db *DB) Delete(key []byte) error {
 	return nil
 }
 
-//关闭数据库,清空所有的资源
+// Close 关闭数据库,清空所有的资源
 func (db *DB) Close() error {
+	defer func() {
+		if err := db.fileLock.Unlock(); err != nil {
+			panic("fail to unlock the directory")
+		}
+	}()
 	if db.activeFile == nil {
 		return nil
 	}
@@ -249,20 +270,20 @@ func (db *DB) Close() error {
 	encRecord, _ := data.EncodeLogRecord(record)
 
 	if err := seqNoFile.Write(encRecord); err != nil {
-
+		return err
 	}
 	seqNoFile.Sync()
 
-	//关闭当前的活跃文件
+	//关闭当前的所有文件
 	if err := db.activeFile.Close(); err != nil {
 		return err
 	}
+
 	for _, file := range db.olderFile {
 		if err := file.Close(); err != nil {
 			return err
 		}
 	}
-	db.seqNo = 0
 	return nil
 }
 
@@ -409,7 +430,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 	hashMerged, nonMergeFileId := false, uint32(0)
 	mergeFinFileName := filepath.Join(db.options.DirPath, data.MergeFinishedFileName)
 	if _, err := os.Stat(mergeFinFileName); err == nil {
-		//todo 前面加载merge数据目录如果发现了有merge操作，可以将mergeFileId保存起来，不用再多进行磁盘IO
+		//TODO 前面加载merge数据目录如果发现了有merge操作，可以将mergeFileId保存起来，不用再多进行磁盘IO
 		nonMergeFileId, err = db.getNonMergeFileId(db.options.DirPath)
 		if err != nil {
 			return err
@@ -441,6 +462,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 		if hashMerged && fileId < nonMergeFileId {
 			continue
 		}
+		//merge完的数据都被消除了事务的标志，merge之后写入的数据仍然保持有事务的id
 		var dataFile *data.DataFile
 		if fileId == db.activeFile.FileId {
 			//当前文件是活跃文件，就从活跃文件中获得
@@ -496,7 +518,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 			//递增offset，下一次从新的位置开始读取
 			offset += size
 		}
-		//如果当前为活跃文件。就需要更新这个文件的WriteOff
+		//如果当前为活跃文件(读到最后一个文件没有写满，我们需要拿到他的偏移量，继续写，直到把他写满)。就需要更新这个文件的WriteOff
 		if i == len(db.fileIds)-1 {
 			db.activeFile.WriteOff = offset
 		}
@@ -522,5 +544,6 @@ func (db *DB) loadSeqNo() error {
 	}
 	db.seqNo = seqNo
 	db.seqNoFileExists = true
-	return nil
+	//加载完我们就需要将这个文件删除，避免追加写，我们对于这个文件只需要一条数据即可
+	return os.Remove(fileName)
 }

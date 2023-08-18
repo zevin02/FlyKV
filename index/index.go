@@ -6,6 +6,8 @@ import (
 	"github.com/google/btree"
 )
 
+//TODO使用哈希来构建使用多个索引，减小索引锁的粒度
+
 //Indexer 定义一个抽象索引接口(内存索引)
 //Get拿到索引的位置信息
 type Indexer interface {
@@ -19,7 +21,7 @@ type Indexer interface {
 	Iterator(reverse bool) Iterator
 	//Size 索引中保存的数据个数
 	Size() int
-	//Close 关闭索引
+	//Close 关闭索引,避免阻塞，以及释放资源
 	Close() error
 }
 type IndexType = int8

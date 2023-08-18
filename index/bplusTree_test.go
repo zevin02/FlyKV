@@ -48,7 +48,7 @@ func TestBPlusTree_Delete(t *testing.T) {
 	path := filepath.Join(DirPath, "bptree-del")
 	os.MkdirAll(path, os.ModePerm)
 	defer func() {
-		_ = os.Remove(DirPath)
+		_ = os.RemoveAll(DirPath)
 	}()
 	tree := NewBPT(path, false)
 	assert.False(t, tree.Delete([]byte("no-exist")))
@@ -63,7 +63,7 @@ func TestBPlusTree_Size(t *testing.T) {
 	path := filepath.Join(DirPath, "bptree-size")
 	os.MkdirAll(path, os.ModePerm)
 	defer func() {
-		_ = os.Remove(DirPath)
+		_ = os.RemoveAll(DirPath)
 	}()
 
 	tree := NewBPT(path, false)
@@ -79,7 +79,7 @@ func TestBPlusTree_Iterator(t *testing.T) {
 	os.MkdirAll(path, os.ModePerm)
 
 	defer func() {
-		_ = os.Remove(DirPath)
+		_ = os.RemoveAll(DirPath)
 	}()
 	tree := NewBPT(path, false)
 	tree.Put([]byte("aac"), &data.LogRecordPos{123, 9999})

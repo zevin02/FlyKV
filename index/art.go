@@ -8,14 +8,14 @@ import (
 	"sync"
 )
 
-//自适应基数树索引
+// AdaptiveRadixTree 自适应基数树索引
 //主要封装https://github.com/plar/go-adaptive-radix-tree
 type AdaptiveRadixTree struct {
 	tree goart.Tree
 	lock *sync.RWMutex //使用读写锁保证并发安全，读取资源的时候可以多个线程并发访问，写的时候只有一个线程允许
 }
 
-//初始化自适应基数树索引
+// NewART 初始化自适应基数树索引
 func NewART() *AdaptiveRadixTree {
 	return &AdaptiveRadixTree{
 		tree: goart.New(), //初始化art树
@@ -65,6 +65,7 @@ func (art *AdaptiveRadixTree) Iterator(reverse bool) Iterator {
 	return newARTIterator(art.tree, reverse)
 }
 
+// Close art不需要进行释放资源
 func (art *AdaptiveRadixTree) Close() error {
 	return nil
 }
@@ -73,7 +74,7 @@ func (art *AdaptiveRadixTree) Close() error {
 type artIterator struct {
 	currIndex int     //遍历到数组的哪一个下标
 	reverse   bool    //是否是一个反向的遍历
-	value     []*Item //key位置索引信息
+	value     []*Item //存储全部的key位置索引信息
 }
 
 func newARTIterator(tree goart.Tree, reverse bool) *artIterator {

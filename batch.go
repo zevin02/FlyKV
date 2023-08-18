@@ -23,6 +23,7 @@ type WriteBatch struct {
 //NewWriteBatch 初始化WriteBatch
 func (db *DB) NewWriteBatch(options WriteBatchOptions) *WriteBatch {
 	//如果是B+树，同时事务序列号文件不存在（不存在可能是第一次进来），且不是第一次加载数据库的时候，就要panic
+	//B+树禁止writebatch可以提高写入性能，B+树中使用会增加写入的锁竞争（避免长时间占用锁）和内存消耗（不需要内存额外维护一个缓冲区），
 	if db.options.IndexType == BPT && !db.seqNoFileExists && !db.isInitialDBInitialized {
 		panic("can not use write batch,seqno file not exist")
 	}
