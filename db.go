@@ -84,7 +84,7 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 	defer func() {
-		//未成merge后需要把关于merge的信息清空
+		//完成merge后需要把关于merge的信息清空
 		db.mergeInfo = MergeInfo{}
 	}()
 
@@ -106,26 +106,28 @@ func Open(options Options) (*DB, error) {
 			return nil, err
 		}
 
-		if db.options.MMapAtStartup {
-			//如果使用MMap加速启动的话，active文件是只读不能写的，所以我们需要设置成标准文件类型
-			if err := db.setIoManger(fio.StanderFIO); err != nil {
-				return nil, err
-			}
-		}
-
 	}
 	//b+树是把索引存储在磁盘中,所以不需要把数据读取到内存中，需要的时候读取即可,取出当前的事务号
 	if options.IndexType == BPT {
-		//加载事务序列号
+		//加载事务序列号(merge的时候)
 		if err := db.loadSeqNo(); err != nil {
 			return nil, err
 		}
+		//B+树的active文件需要更新
 		//对于B+树模型，不会更新offset，所以这里要手动的更新active文件的offset
-		size, err := db.activeFile.IoManager.Size()
-		if err != nil {
+		if db.activeFile != nil {
+			size, err := db.activeFile.IoManager.Size()
+			if err != nil {
+				return nil, err
+			}
+			db.activeFile.WriteOff = uint64(size)
+		}
+	}
+	if db.options.MMapAtStartup {
+		//如果使用MMap加速启动的话，active文件是只读不能写的，所以我们需要设置成标准文件类型
+		if err := db.setIoManger(fio.StanderFIO); err != nil {
 			return nil, err
 		}
-		db.activeFile.WriteOff = uint64(size)
 	}
 	return db, nil
 }
@@ -591,7 +593,7 @@ func (db *DB) loadSeqNo() error {
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
 		return nil
 	}
-	seqNoFile, err := data.OpenSeqNoFile(fileName)
+	seqNoFile, err := data.OpenSeqNoFile(db.options.DirPath)
 	if err != nil {
 		return err
 	}

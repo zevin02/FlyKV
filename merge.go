@@ -99,10 +99,7 @@ func (db *DB) Merge() error {
 			return err
 		}
 	}
-	////新建一个merge path目录 TODO 删除该代码
-	//if err := os.MkdirAll(mergePath, os.ModePerm); err != nil {
-	//	return err
-	//}
+
 	//打开一个新的临时的bitcask实例
 	mergeOption := db.options
 	mergeOption.DirPath = mergePath

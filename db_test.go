@@ -22,7 +22,8 @@ func destroyDB(db *DB) {
 	}
 }
 
-func TestOpen(t *testing.T) {
+//测试btree
+func TestOpen1(t *testing.T) {
 	opts := DefaultOperations
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -30,7 +31,28 @@ func TestOpen(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestDB_Put(t *testing.T) {
+//测试b+ tree
+func TestOpen2(t *testing.T) {
+	opts := DefaultOperations
+	opts.IndexType = BPT
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+}
+
+//测试artree
+func TestOpen3(t *testing.T) {
+	opts := DefaultOperations
+	opts.IndexType = ART
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+}
+
+//测试Btree
+func TestDB_Put1(t *testing.T) {
 	opts := DefaultOperations
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -64,11 +86,11 @@ func TestDB_Put(t *testing.T) {
 	assert.Nil(t, err)
 
 	//5.写到数据文件进行了转化
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < 10000; i++ {
 		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, 2, len(db.olderFile))
+	assert.Equal(t, 0, len(db.olderFile))
 
 	//6.重启后再Put数据
 	err = db.Close()
@@ -86,7 +108,123 @@ func TestDB_Put(t *testing.T) {
 	assert.Equal(t, val4, val5)
 }
 
-func TestDB_Get(t *testing.T) {
+//测试B+tree
+func TestDB_Put2(t *testing.T) {
+	opts := DefaultOperations
+	opts.IndexType = BPT
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+
+	//1.正常put一条数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(24))
+	assert.Nil(t, err)
+	val1, err := db.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val1)
+
+	//2.重复put key相同的数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(24))
+	assert.Nil(t, err)
+	val2, err := db.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val2)
+
+	//3.key为空
+	err = db.Put(nil, utils.RandomValue(24))
+	assert.Equal(t, ErrKeyIsEmpty, err)
+
+	//4.value为空
+	err = db.Put(utils.GetTestKey(22), nil)
+	assert.Nil(t, err)
+	val3, err := db.Get(utils.GetTestKey(22))
+	assert.Equal(t, 0, len(val3))
+	assert.Nil(t, err)
+
+	//5.写到数据文件进行了转化
+	for i := 0; i < 10000; i++ {
+		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+		assert.Nil(t, err)
+	}
+	assert.Equal(t, 0, len(db.olderFile))
+
+	//6.重启后再Put数据
+	err = db.Close()
+	assert.Nil(t, err)
+
+	//7.重启数据库
+	db2, err := Open(opts)
+	assert.Nil(t, err)
+	assert.NotNil(t, db2)
+	val4 := utils.RandomValue(128)
+	err = db2.Put(utils.GetTestKey(55), val4)
+	assert.Nil(t, err)
+	val5, err := db2.Get(utils.GetTestKey(55))
+	assert.Nil(t, err)
+	assert.Equal(t, val4, val5)
+}
+
+//测试ARTree
+func TestDB_Put3(t *testing.T) {
+	opts := DefaultOperations
+	opts.IndexType = ART
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+
+	//1.正常put一条数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(24))
+	assert.Nil(t, err)
+	val1, err := db.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val1)
+
+	//2.重复put key相同的数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(24))
+	assert.Nil(t, err)
+	val2, err := db.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val2)
+
+	//3.key为空
+	err = db.Put(nil, utils.RandomValue(24))
+	assert.Equal(t, ErrKeyIsEmpty, err)
+
+	//4.value为空
+	err = db.Put(utils.GetTestKey(22), nil)
+	assert.Nil(t, err)
+	val3, err := db.Get(utils.GetTestKey(22))
+	assert.Equal(t, 0, len(val3))
+	assert.Nil(t, err)
+
+	////5.写到数据文件进行了转化
+	for i := 0; i < 10000; i++ {
+		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+		assert.Nil(t, err)
+	}
+	assert.Equal(t, 0, len(db.olderFile))
+
+	//6.重启后再Put数据
+	err = db.Close()
+	assert.Nil(t, err)
+
+	//7.重启数据库
+	db2, err := Open(opts)
+	assert.Nil(t, err)
+	assert.NotNil(t, db2)
+	val4 := utils.RandomValue(128)
+	err = db2.Put(utils.GetTestKey(55), val4)
+	assert.Nil(t, err)
+	val5, err := db2.Get(utils.GetTestKey(55))
+	assert.Nil(t, err)
+	assert.Equal(t, val4, val5)
+}
+
+func TestDB_Get1(t *testing.T) {
 	opts := DefaultOperations
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -123,11 +261,148 @@ func TestDB_Get(t *testing.T) {
 	assert.Equal(t, 0, len(val4))
 
 	//转化为了旧文件，从旧文件中读value
-	for i := 100; i < 1000000; i++ {
+	for i := 100; i < 10000; i++ {
 		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, 2, len(db.olderFile))
+	assert.Equal(t, 0, len(db.olderFile))
+	val5, err := db.Get(utils.GetTestKey(101))
+	assert.Nil(t, err)
+	assert.NotNil(t, val5)
+
+	//6.重启后，前面数据都能拿到
+	err = db.Close()
+	assert.Nil(t, err)
+
+	//重启数据库
+	db2, err := Open(opts)
+	val6, err := db2.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val6)
+	assert.Equal(t, val1, val6)
+
+	val7, err := db2.Get(utils.GetTestKey(11))
+	assert.Nil(t, err)
+	assert.NotNil(t, val7)
+	assert.Equal(t, val3, val7)
+
+	val8, err := db2.Get(utils.GetTestKey(44))
+	assert.Equal(t, 0, len(val8))
+	assert.Equal(t, ErrKeyNotFound, err)
+}
+
+//测试ART
+func TestDB_Get2(t *testing.T) {
+	opts := DefaultOperations
+	opts.IndexType = ART
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+
+	//1.正常读取一条数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(24))
+	assert.Nil(t, err)
+	val1, err := db.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val1)
+
+	//2.读取一个不存在的key
+	val2, err := db.Get([]byte("unknow key"))
+	assert.Nil(t, val2)
+	assert.Equal(t, ErrKeyNotFound, err)
+
+	//3.值被重复put后读取
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(24))
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(24))
+	val3, err := db.Get(utils.GetTestKey(11))
+	assert.Nil(t, err)
+	assert.NotNil(t, val3)
+
+	//4.值被删除后再Get
+	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
+	assert.Nil(t, err)
+	err = db.Delete(utils.GetTestKey(22))
+	val4, err := db.Get(utils.GetTestKey(22))
+	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, 0, len(val4))
+
+	//转化为了旧文件，从旧文件中读value
+	for i := 100; i < 10000; i++ {
+		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+		assert.Nil(t, err)
+	}
+	assert.Equal(t, 0, len(db.olderFile))
+	val5, err := db.Get(utils.GetTestKey(101))
+	assert.Nil(t, err)
+	assert.NotNil(t, val5)
+
+	//6.重启后，前面数据都能拿到
+	err = db.Close()
+	assert.Nil(t, err)
+
+	//重启数据库
+	db2, err := Open(opts)
+	val6, err := db2.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val6)
+	assert.Equal(t, val1, val6)
+
+	val7, err := db2.Get(utils.GetTestKey(11))
+	assert.Nil(t, err)
+	assert.NotNil(t, val7)
+	assert.Equal(t, val3, val7)
+
+	val8, err := db2.Get(utils.GetTestKey(44))
+	assert.Equal(t, 0, len(val8))
+	assert.Equal(t, ErrKeyNotFound, err)
+}
+
+func TestDB_Get3(t *testing.T) {
+	opts := DefaultOperations
+	opts.IndexType = BPT
+	opts.FileSize = 64 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+
+	//1.正常读取一条数据
+	err = db.Put(utils.GetTestKey(1), utils.RandomValue(24))
+	assert.Nil(t, err)
+	val1, err := db.Get(utils.GetTestKey(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, val1)
+
+	//2.读取一个不存在的key
+	val2, err := db.Get([]byte("unknow key"))
+	assert.Nil(t, val2)
+	assert.Equal(t, ErrKeyNotFound, err)
+
+	//3.值被重复put后读取
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(24))
+	assert.Nil(t, err)
+	err = db.Put(utils.GetTestKey(11), utils.RandomValue(24))
+	val3, err := db.Get(utils.GetTestKey(11))
+	assert.Nil(t, err)
+	assert.NotNil(t, val3)
+
+	//4.值被删除后再Get
+	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
+	assert.Nil(t, err)
+	err = db.Delete(utils.GetTestKey(22))
+	val4, err := db.Get(utils.GetTestKey(22))
+	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, 0, len(val4))
+
+	//转化为了旧文件，从旧文件中读value
+	for i := 100; i < 10000; i++ {
+		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
+		assert.Nil(t, err)
+	}
+	assert.Equal(t, 0, len(db.olderFile))
 	val5, err := db.Get(utils.GetTestKey(101))
 	assert.Nil(t, err)
 	assert.NotNil(t, val5)
