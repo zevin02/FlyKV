@@ -25,6 +25,7 @@ func destroyDB(db *DB) {
 //测试btree
 func TestOpen1(t *testing.T) {
 	opts := DefaultOperations
+	opts.IndexType = Btree
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)
@@ -54,6 +55,7 @@ func TestOpen3(t *testing.T) {
 //测试Btree
 func TestDB_Put1(t *testing.T) {
 	opts := DefaultOperations
+	opts.IndexType = Btree
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -86,11 +88,11 @@ func TestDB_Put1(t *testing.T) {
 	assert.Nil(t, err)
 
 	//5.写到数据文件进行了转化
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000000; i++ {
 		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, 0, len(db.olderFile))
+	assert.Equal(t, 2, len(db.olderFile))
 
 	//6.重启后再Put数据
 	err = db.Close()
@@ -202,11 +204,11 @@ func TestDB_Put3(t *testing.T) {
 	assert.Nil(t, err)
 
 	////5.写到数据文件进行了转化
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000000; i++ {
 		err = db.Put(utils.GetTestKey(i), utils.RandomValue(128))
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, 0, len(db.olderFile))
+	assert.Equal(t, 2, len(db.olderFile))
 
 	//6.重启后再Put数据
 	err = db.Close()
@@ -590,7 +592,30 @@ func TestDB_Stat(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	assert.NotNil(t, db.Stat())
-	//t.Log(stat)
+}
+
+func TestDB_BackUp(t *testing.T) {
+	opts := DefaultOperations
+	opts.FileSize = 32 * 1024 * 1024
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.NotNil(t, db)
+	assert.Nil(t, err)
+	for i := 0; i < 10000; i++ {
+		err = db.Put(utils.GetTestKey(i), []byte("utils.RandomValue(128)"))
+		assert.Nil(t, err)
+	}
+	backUpDir, _ := os.MkdirTemp("", "bitcask-go-backup")
+
+	err = db.BackUp(backUpDir)
+	assert.Nil(t, err)
+	opts.DirPath = backUpDir
+	db2, err := Open(opts)
+	defer destroyDB(db2)
+	assert.Nil(t, err)
+	assert.NotNil(t, db2)
+	val, _ := db2.Get(utils.GetTestKey(1))
+	t.Log(string(val))
 }
 
 //func TestOpen2(t *testing.T) {

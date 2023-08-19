@@ -2,7 +2,9 @@ package utils
 
 import (
 	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -33,4 +35,44 @@ func AvailableDiskSize() (uint64, error) {
 		return 0, err
 	}
 	return stat.Bavail * uint64(stat.Bsize), nil
+}
+
+//TODO 文件达到阈值的时候，可以把这个文件改成mmap的形式来读取加快速度
+
+// CopyDir 拷贝数据目录
+func CopyDir(src, dst string, exclude []string) error {
+	//目标不存在则创建
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		if err := os.MkdirAll(dst, os.ModePerm); err != nil {
+			return err
+		}
+	}
+	//递归遍历整个数据目录
+	return filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
+		fileName := strings.Replace(path, src, "", 1) //取出路径中的文件名
+		if fileName == "" {
+			return nil
+		}
+		//查看该文件是否包含在排除的文件集合中
+		for _, e := range exclude {
+			matched, err := filepath.Match(e, info.Name())
+			if err != nil {
+				return err
+			}
+			if matched {
+				return nil
+			}
+		}
+		if info.IsDir() {
+			//如果是文件夹的话，就需要在目标路径中创建一个相同的文件夹
+			return os.MkdirAll(filepath.Join(dst, fileName), info.Mode())
+		}
+		//普通文件的话就需要读取数据并写入到指定位置
+		data, err := os.ReadFile(filepath.Join(src, fileName))
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dst, fileName), data, info.Mode())
+	})
+
 }

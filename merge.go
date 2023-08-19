@@ -180,7 +180,7 @@ func (db *DB) Merge() error {
 		return err
 	}
 
-	//TODO merge完需要将完成文件拷贝到正常目录下，并且重新构建索引
+	//TODO merge完需要将完成文件拷贝到正常目录下，并且重新构建索引，B+树需要全量的重新加载索引
 	return nil
 }
 

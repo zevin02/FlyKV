@@ -27,7 +27,7 @@ var DefaultOperations = Options{
 	DirPath:            string("/home/zevin/githubmanage/program/BitcaskDB/storefile"),
 	FileSize:           256 * 1024 * 1024, //256MB
 	SyncWrite:          false,
-	IndexType:          Btree,
+	IndexType:          ART,
 	BytePerSync:        0,
 	TimeSync:           0,
 	MMapAtStartup:      true,

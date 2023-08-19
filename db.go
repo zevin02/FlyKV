@@ -254,6 +254,9 @@ func (db *DB) Delete(key []byte) error {
 	}
 	//写入到数据文件中
 	pos, err := db.appendLogRecordWithLock(logRecord)
+	if err != nil {
+		return err
+	}
 	//删除的这个数据本身也是无效数据存储在磁盘中,也是可以删除的
 	db.reclaimSize += uint64(pos.Size)
 
@@ -347,6 +350,13 @@ func (db *DB) Stat() *Stat {
 		DiskSize:        totalSize,
 	}
 
+}
+
+func (db *DB) BackUp(dir string) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	//拷贝文件的时候文件锁不能拷贝过去，一个目录只能包含一个文件锁
+	return utils.CopyDir(db.options.DirPath, dir, []string{fileFlockName})
 }
 
 //加锁的写入
@@ -615,10 +625,10 @@ func (db *DB) setIoManger(managerType fio.IOManagerType) error {
 	if err := db.activeFile.SetIOManager(db.options.DirPath, managerType); err != nil {
 		return err
 	}
-	for _, datafile := range db.olderFile {
-		if err := datafile.SetIOManager(db.options.DirPath, managerType); err != nil {
-			return err
-		}
-	}
+	//for _, datafile := range db.olderFile {
+	//	if err := datafile.SetIOManager(db.options.DirPath, managerType); err != nil {
+	//		return err
+	//	}
+	//}
 	return nil
 }
