@@ -225,9 +225,6 @@ func TestDB_ListKeys(t *testing.T) {
 	err = db.Put(utils.GetTestKey(1111), utils.RandomValue(20))
 	assert.Nil(t, err)
 	keys3 := db.ListKeys()
-	for _, key := range keys3 {
-		t.Log(string(key))
-	}
 	assert.Equal(t, 4, len(keys3))
 }
 

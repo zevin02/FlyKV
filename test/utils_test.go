@@ -28,6 +28,6 @@ func TestDirSize(t *testing.T) {
 
 func TestAvailableDiskSize(t *testing.T) {
 	size, _ := utils.AvailableDiskSize()
-	t.Log(size / 1024 / 1024 / 1024)
-
+	//t.Log(size / 1024 / 1024 / 1024)
+	assert.NotNil(t, size)
 }

@@ -51,7 +51,7 @@ func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	}
 	iter.Rewind()
 	for iter.Seek([]byte("a")); iter.Valid(); iter.Next() {
-		t.Log(string(iter.Key()))
+		assert.NotNil(t, iter.Key())
 	}
 	//反向迭代
 	opts1 := DefaultIteratorOptions

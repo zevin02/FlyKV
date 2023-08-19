@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"io"
 	"path/filepath"
+	"strconv"
 )
 
 const (
@@ -34,9 +35,9 @@ func OpenDataFile(dirPath string, fileId uint32, managerType fio.IOManagerType) 
 }
 
 // OpenHintFile 打开一个hint文件在merge的时候
-func OpenHintFile(dirPath string) (*DataFile, error) {
+func OpenHintFile(dirPath string, managerType fio.IOManagerType) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, HintFileName)
-	return newDataFile(fileName, 0, fio.StanderFIO)
+	return newDataFile(fileName, 0, managerType)
 }
 
 // OpenMergeFinishedFile 打开一个merge完成的文件
@@ -147,6 +148,23 @@ func (df *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
 	}
 	encRecord, _ := EncodeLogRecord(record)
 	return df.Write(encRecord)
+}
+func (df *DataFile) WriteAndSyncMergeFinishRecord(key []byte, nonMergeFileId int) error {
+	//
+	mergeFinRecord := &LogRecord{
+		Key:   key,
+		Value: []byte(strconv.Itoa(nonMergeFileId)),
+	}
+	encRecord, _ := EncodeLogRecord(mergeFinRecord)
+
+	if err := df.Write(encRecord); err != nil {
+		return err
+	}
+
+	if err := df.Sync(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (df *DataFile) readNByte(n int64, offset uint64) (b []byte, err error) {

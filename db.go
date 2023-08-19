@@ -29,12 +29,12 @@ type DB struct {
 	olderFile              map[uint32]*data.DataFile //旧的数据文件，用来读取
 	index                  index.Indexer             //数据的内存索引
 	seqNo                  uint64                    //事务序列号，全局递增
-	isMerging              bool                      //标识是否处在merge阶段
 	seqNoFileExists        bool                      //存储事务序列号的文件是否存在
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
 	fileLock               *flock.Flock              //当前进程持有的文件锁,保证多进程之间互斥
 	ByteWritten            uint64                    //累积写了多少的字节
 	reclaimSize            uint64                    //当前有多少字节是无效的
+	mergeInfo              MergeInfo                 //保存merge相关信息
 }
 type Stat struct {
 	KeyNum          int    //key的总数量
@@ -76,15 +76,17 @@ func Open(options Options) (*DB, error) {
 		olderFile:              make(map[uint32]*data.DataFile),
 		index:                  index.NewIndex(options.IndexType, options.DirPath, options.SyncWrite), //初始化内存索引
 		seqNo:                  nonTransactionSeq,
-		isMerging:              false,
 		isInitialDBInitialized: isInitial,
 		fileLock:               fileFlock,
-		reclaimSize:            0,
 	}
 	//加载merge数据目录,将merge目录下的数据都移动过来
 	if err := db.loadMergeFiles(); err != nil {
 		return nil, err
 	}
+	defer func() {
+		//未成merge后需要把关于merge的信息清空
+		db.mergeInfo = MergeInfo{}
+	}()
 
 	//正常的在进行加载数据文件
 	if err := db.loadDataFile(); err != nil {
@@ -148,7 +150,6 @@ func (db *DB) Put(key []byte, value []byte) error {
 	if oldPos := db.index.Put(key, pos); oldPos != nil {
 		//如果有数据，则出现无效数据，存在磁盘里，但内存中已更新。
 		db.reclaimSize += uint64(oldPos.Size)
-		return ErrIndexUpdateFailed
 	}
 	return nil
 }
@@ -300,7 +301,9 @@ func (db *DB) Close() error {
 	if err := seqNoFile.Write(encRecord); err != nil {
 		return err
 	}
-	seqNoFile.Sync()
+	if err := seqNoFile.Sync(); err != nil {
+		return err
+	}
 
 	//关闭当前的所有文件
 	if err := db.activeFile.Close(); err != nil {
@@ -490,18 +493,6 @@ func (db *DB) loadIndexFromDataFiles() error {
 	if len(db.fileIds) == 0 {
 		return nil
 	}
-	//查看是否发生过merge，如果发生过merge，我们前面已经在hint文件中加载了索引，这个id以前的我们都不需要进行构建索引
-	hashMerged, nonMergeFileId := false, uint32(0)
-	mergeFinFileName := filepath.Join(db.options.DirPath, data.MergeFinishedFileName)
-	if _, err := os.Stat(mergeFinFileName); err == nil {
-		//TODO 前面加载merge数据目录如果发现了有merge操作，可以将mergeFileId保存起来，不用再多进行磁盘IO
-		nonMergeFileId, err = db.getNonMergeFileId(db.options.DirPath)
-		if err != nil {
-			return err
-		}
-		//说明merge存在,已完成
-		hashMerged = true
-	}
 
 	//更新内存索引,
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
@@ -526,7 +517,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 	for i, fid := range db.fileIds {
 		var fileId = uint32(fid)
 		//如果比最近未参与merge的文件id小，说明已经从hint文件中加载了索引
-		if hashMerged && fileId < nonMergeFileId {
+		if db.mergeInfo.hashMerged && fileId < db.mergeInfo.nonMergeFildId {
 			continue
 		}
 		//merge完的数据都被消除了事务的标志，merge之后写入的数据仍然保持有事务的id

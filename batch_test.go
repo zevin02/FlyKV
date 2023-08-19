@@ -62,9 +62,8 @@ func TestDB_WriteBatch2(t *testing.T) {
 	err = wb.Put(utils.GetTestKey(11), utils.RandomValue(10))
 	err = wb.Commit()
 	assert.Nil(t, err)
-	val, err := db.Get(utils.GetTestKey(1))
+	_, err = db.Get(utils.GetTestKey(1))
 	assert.Equal(t, ErrKeyNotFound, err)
-	t.Log(string(val))
 
 	//重启
 	err = db.Close()
@@ -84,9 +83,7 @@ func TestDB_WriteBatch3(t *testing.T) {
 	assert.NotNil(t, db)
 	assert.Nil(t, err)
 
-	keys := db.ListKeys()
-	t.Log(len(keys))
-	//
+	_ = db.ListKeys()
 	wbOpts := DefaultWriteBatchOption
 	wbOpts.MaxWriteNum = 10000000
 	wb := db.NewWriteBatch(wbOpts)
