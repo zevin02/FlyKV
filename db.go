@@ -96,17 +96,11 @@ func Open(options Options) (*DB, error) {
 	//加载内存索引
 	//非b+树是把索引存储在内存中
 	if options.IndexType != BPT {
-		//从hint文件中加载索引
-		if err := db.loadIndexFromHintFile(); err != nil {
+		if err := db.loadIndex(); err != nil {
 			return nil, err
 		}
-
-		//从数据文件中加载索引
-		if err := db.loadIndexFromDataFiles(); err != nil {
-			return nil, err
-		}
-
 	}
+
 	//b+树是把索引存储在磁盘中,所以不需要把数据读取到内存中，需要的时候读取即可,取出当前的事务号
 	if options.IndexType == BPT {
 		//加载事务序列号(merge的时候)
@@ -310,16 +304,10 @@ func (db *DB) Close() error {
 		return err
 	}
 
-	//关闭当前的所有文件
-	if err := db.activeFile.Close(); err != nil {
+	if err := db.closeFiles(); err != nil {
 		return err
 	}
 
-	for _, file := range db.olderFile {
-		if err := file.Close(); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -630,5 +618,36 @@ func (db *DB) setIoManger(managerType fio.IOManagerType) error {
 	//		return err
 	//	}
 	//}
+	return nil
+}
+
+func (db *DB) loadIndex() error {
+	//从hint文件中加载索引
+	if err := db.loadIndexFromHintFile(); err != nil {
+		return err
+	}
+
+	//从数据文件中加载索引
+	if err := db.loadIndexFromDataFiles(); err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func (db *DB) closeFiles() error {
+	//关闭当前的所有文件
+	if db.activeFile == nil {
+		return nil
+	}
+	if err := db.activeFile.Close(); err != nil {
+		return err
+	}
+
+	for _, file := range db.olderFile {
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
 	return nil
 }

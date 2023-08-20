@@ -21,10 +21,49 @@ type MergeInfo struct {
 	isMerging      bool   //是否正在处于merge状态
 	nonMergeFildId uint32 //未merge的值
 	hashMerged     bool   //是否完成了merge
+	maxFileID      uint32 //merge未成生成的最大文件ID
 }
 
 //Merge 清理无效数据，生成hint文件
-func (db *DB) Merge() error {
+//if reLoad is true ,db will reload file and index
+func (db *DB) Merge(reLoad bool) error {
+	//执行merge操作
+	if err := db.doMerge(); err != nil {
+		return err
+	}
+	if !reLoad {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	//TODO merge完需要将完成文件拷贝到正常目录下，并且重新构建索引，B+树需要全量的重新加载索引
+	//将文件全部关闭
+	if err := db.closeFiles(); err != nil {
+		return err
+	}
+	db.olderFile = make(map[uint32]*data.DataFile)
+	db.activeFile = nil
+	//将merge目录下的文件拷贝过来
+	if err := db.loadMergeFiles(); err != nil {
+		return err
+	}
+	if err := db.loadDataFile(); err != nil {
+		return err
+	}
+
+	//更新索引
+	if err := db.loadIndex(); err != nil {
+		return err
+	}
+	if err := db.setIoManger(fio.StanderFIO); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//执行merge操作
+func (db *DB) doMerge() error {
 	//如果数据库为空，直接返回
 	if db.activeFile == nil {
 		return nil
@@ -76,7 +115,7 @@ func (db *DB) Merge() error {
 		return err
 	}
 	//记录最近没有参与merge的文件id,这个是当前用户使用的活跃文件id
-	nonMergeFileId := db.activeFile.FileId
+	db.mergeInfo.nonMergeFildId = db.activeFile.FileId
 
 	//取出db中所有需要merge的文件
 	var mergeFile []*data.DataFile
@@ -176,11 +215,9 @@ func (db *DB) Merge() error {
 	//重启的时候检查是否有merge目录，是否有merge完成的文件，存在就是与小merge，否则就是一个无效的merge操作
 	//
 
-	if err := mergeFinishedFile.WriteAndSyncMergeFinishRecord([]byte(nonMergeFileIDKey), int(nonMergeFileId)); err != nil {
+	if err := mergeFinishedFile.WriteAndSyncMergeFinishRecord([]byte(nonMergeFileIDKey), int(db.mergeInfo.nonMergeFildId)); err != nil {
 		return err
 	}
-
-	//TODO merge完需要将完成文件拷贝到正常目录下，并且重新构建索引，B+树需要全量的重新加载索引
 	return nil
 }
 
@@ -194,6 +231,7 @@ func (db *DB) getMergePath() string {
 
 //loadMergeFiles 将merge目录中的所有文件（数据文件，hint文件，fin文件）都移动到主目录中
 func (db *DB) loadMergeFiles() error {
+
 	mergePath := db.getMergePath()
 	if _, err := os.Stat(mergePath); os.IsNotExist(err) {
 		//merge目录不存在的话，就直接进行返回
@@ -225,6 +263,7 @@ func (db *DB) loadMergeFiles() error {
 		}
 		mergeFileNames = append(mergeFileNames, entry.Name()) //将merge中用到的文件名保存起来,供后续转移
 	}
+
 	//没有merge完成，直接返回
 	if !db.mergeInfo.hashMerged {
 		return nil
@@ -240,11 +279,18 @@ func (db *DB) loadMergeFiles() error {
 
 	for ; fileId < db.mergeInfo.nonMergeFildId; fileId++ {
 		fileName := data.GetDataFileName(db.options.DirPath, uint32(fileId))
+		fileMergeName := data.GetDataFileName(mergePath, uint32(fileId))
+
 		if _, err := os.Stat(fileName); err == nil {
 			//该文件存在,就需要进行删除
+
 			if err := os.Remove(fileName); err != nil {
 				return err
 			}
+		}
+		if _, err := os.Stat(fileMergeName); err == nil {
+			//该文件存在,就需要进行删除
+			db.mergeInfo.maxFileID = fileId
 		}
 	}
 
@@ -300,7 +346,7 @@ func (db *DB) loadIndexFromHintFile() error {
 	//hint中都是有效数据,读取数据文件,从磁盘中读取数据到内存中构建内存的索引
 	var offset uint64 = 0
 	for {
-		record, size, err := hintFile.ReadLogRecord(offset)
+		record, size, err := hintFile.ReadLogRecord(offset) //merge的时候
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -308,10 +354,29 @@ func (db *DB) loadIndexFromHintFile() error {
 			return err
 		}
 		//解码获得位置信息
-		pos := data.DecodeLogRecordPos(record.Value)
+		hintPos := data.DecodeLogRecordPos(record.Value) //获得hint中的索引信息
+
 		//根据位置信息来构建索引
-		db.index.Put(record.Key, pos)
+		db.index.Put(record.Key, hintPos)
 		offset += size
 	}
+	return nil
+}
+
+func (db *DB) openMergeFile() error {
+	for fid := uint32(0); fid < db.mergeInfo.nonMergeFildId; fid++ {
+		if fid <= db.mergeInfo.maxFileID {
+			dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid), fio.MMapFio)
+			if err != nil {
+				return err
+			}
+			//否则就放入到旧文件集合中
+			db.olderFile[uint32(fid)] = dataFile
+		} else {
+			//删除无用的文件
+			delete(db.olderFile, uint32(fid))
+		}
+	}
+
 	return nil
 }

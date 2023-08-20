@@ -140,6 +140,7 @@ func (df *DataFile) Write(buf []byte) error {
 }
 
 // WriteHintRecord 将位置索引信息写入到hint文件中
+// hint record的key没有编码过的
 func (df *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
 	//value是该key的位置信息
 	record := &LogRecord{
