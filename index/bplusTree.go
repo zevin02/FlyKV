@@ -1,7 +1,7 @@
 package index
 
 import (
-	"BitcaskDB/data"
+	"FlexDB/data"
 	"go.etcd.io/bbolt"
 	"path/filepath"
 )

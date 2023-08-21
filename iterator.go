@@ -1,7 +1,7 @@
-package BitcaskDB
+package FlexDB
 
 import (
-	"BitcaskDB/index"
+	"FlexDB/index"
 	"bytes"
 )
 

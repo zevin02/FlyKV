@@ -1,7 +1,7 @@
 package test
 
 import (
-	"BitcaskDB/data"
+	"FlexDB/data"
 	"github.com/stretchr/testify/assert"
 	"hash/crc32"
 	"testing"

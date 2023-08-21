@@ -1,7 +1,7 @@
 package index
 
 import (
-	"BitcaskDB/data"
+	"FlexDB/data"
 	"bytes"
 	"github.com/google/btree"
 	"sort"

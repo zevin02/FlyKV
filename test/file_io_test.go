@@ -1,7 +1,7 @@
 package test
 
 import (
-	"BitcaskDB/fio"
+	"FlexDB/fio"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"

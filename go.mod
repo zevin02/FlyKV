@@ -1,4 +1,4 @@
-module BitcaskDB
+module FlexDB
 
 go 1.18
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"BitcaskDB"
+	"FlexDB"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,14 +9,14 @@ import (
 	"os"
 )
 
-var db *BitcaskDB.DB //DB实例
+var db *FlexDB.DB //DB实例
 func init() {
 	//初始化db实例
 	var err error
-	options := BitcaskDB.DefaultOperations
+	options := FlexDB.DefaultOperations
 	dir, _ := os.MkdirTemp("", "bitcask-go-http")
 	options.DirPath = dir
-	db, err = BitcaskDB.Open(options)
+	db, err = FlexDB.Open(options)
 	if err != nil {
 		panic(fmt.Sprintf("failed to open db: %v", err))
 	}
@@ -54,7 +54,7 @@ func handleGet(writer http.ResponseWriter, request *http.Request) {
 	key := request.URL.Query().Get("key")
 
 	value, err := db.Get([]byte(key))
-	if err != nil && err != BitcaskDB.ErrKeyNotFound {
+	if err != nil && err != FlexDB.ErrKeyNotFound {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		log.Printf("failed to get kv in db: %v\n", err)
 		return
@@ -73,7 +73,7 @@ func handleDelete(writer http.ResponseWriter, request *http.Request) {
 	key := request.URL.Query().Get("key")
 
 	err := db.Delete([]byte(key))
-	if err != nil && err != BitcaskDB.ErrKeyIsEmpty {
+	if err != nil && err != FlexDB.ErrKeyIsEmpty {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		log.Printf("failed to get kv in db: %v\n", err)
 		return

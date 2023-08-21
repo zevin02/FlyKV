@@ -1,4 +1,4 @@
-package BitcaskDB
+package FlexDB
 
 type Options struct {
 	DirPath     string    //数据库数据目录
@@ -24,7 +24,7 @@ const (
 )
 
 var DefaultOperations = Options{
-	DirPath:            string("/home/zevin/githubmanage/program/BitcaskDB/storefile"),
+	DirPath:            string("/home/zevin/githubmanage/program/FlexDB/storefile"),
 	FileSize:           256 * 1024 * 1024, //256MB
 	SyncWrite:          false,
 	IndexType:          Btree,

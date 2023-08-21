@@ -1,7 +1,7 @@
-package BitcaskDB
+package FlexDB
 
 import (
-	"BitcaskDB/utils"
+	"FlexDB/utils"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"os"

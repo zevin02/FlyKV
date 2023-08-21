@@ -1,7 +1,7 @@
 package index
 
 import (
-	"BitcaskDB/data"
+	"FlexDB/data"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

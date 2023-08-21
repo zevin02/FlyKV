@@ -1,7 +1,7 @@
-package BitcaskDB
+package FlexDB
 
 import (
-	"BitcaskDB/utils"
+	"FlexDB/utils"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -615,7 +615,7 @@ func TestDB_BackUp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, db2)
 	val, _ := db2.Get(utils.GetTestKey(1))
-	t.Log(string(val))
+	assert.NotNil(t, val)
 }
 
 //func TestOpen2(t *testing.T) {

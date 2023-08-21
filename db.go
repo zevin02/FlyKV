@@ -1,10 +1,10 @@
-package BitcaskDB
+package FlexDB
 
 import (
-	"BitcaskDB/data"
-	"BitcaskDB/fio"
-	"BitcaskDB/index"
-	"BitcaskDB/utils"
+	"FlexDB/data"
+	"FlexDB/fio"
+	"FlexDB/index"
+	"FlexDB/utils"
 	"github.com/gofrs/flock"
 	"io"
 	"os"

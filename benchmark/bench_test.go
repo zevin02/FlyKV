@@ -1,22 +1,22 @@
 package benchmark
 
 import (
-	"BitcaskDB"
-	"BitcaskDB/utils"
+	"FlexDB"
+	"FlexDB/utils"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-var db *BitcaskDB.DB
+var db *FlexDB.DB
 
 func init() {
 	//初始化一个存储引擎对象
-	opt := BitcaskDB.DefaultOperations
-	opt.IndexType = BitcaskDB.Btree
+	opt := FlexDB.DefaultOperations
+	opt.IndexType = FlexDB.Btree
 	var err error
-	db, err = BitcaskDB.Open(opt)
+	db, err = FlexDB.Open(opt)
 	if err != nil {
 		panic(err)
 	}
@@ -44,7 +44,7 @@ func Benchmark_Get(b *testing.B) {
 	b.ReportAllocs() //可以打印出内存分配的情况
 	for i := 0; i < b.N; i++ {
 		_, err := db.Get(utils.GetTestKey(rand.Int()))
-		if err != nil && err != BitcaskDB.ErrKeyNotFound {
+		if err != nil && err != FlexDB.ErrKeyNotFound {
 			b.Fatal(err)
 		}
 	}

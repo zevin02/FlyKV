@@ -1,7 +1,7 @@
 package test
 
 import (
-	"BitcaskDB/utils"
+	"FlexDB/utils"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"

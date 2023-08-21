@@ -1,7 +1,7 @@
 package redis
 
 import (
-	"BitcaskDB"
+	"FlexDB"
 	"encoding/binary"
 	"errors"
 	"time"
@@ -18,12 +18,12 @@ const (
 )
 
 type RedisDataStruct struct {
-	db *BitcaskDB.DB
+	db *FlexDB.DB
 }
 
 // NewRedisDataStruct 初始化Redis数据结构服务
-func NewRedisDataStruct(options BitcaskDB.Options) (*RedisDataStruct, error) {
-	db, err := BitcaskDB.Open(options)
+func NewRedisDataStruct(options FlexDB.Options) (*RedisDataStruct, error) {
+	db, err := FlexDB.Open(options)
 	if err != nil {
 		return nil, err
 	}

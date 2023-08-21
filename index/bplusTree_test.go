@@ -1,14 +1,14 @@
 package index
 
 import (
-	"BitcaskDB/data"
+	"FlexDB/data"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-const DirPath = "/home/zevin/githubmanage/program/BitcaskDB/tmp"
+const DirPath = "/home/zevin/githubmanage/program/FlexDB/tmp"
 
 func TestBPlusTree_Put(t *testing.T) {
 	path := filepath.Join(DirPath, "bptree-put")

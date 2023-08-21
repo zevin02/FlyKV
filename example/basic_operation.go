@@ -1,14 +1,14 @@
 package main
 
 import (
-	"BitcaskDB"
+	"FlexDB"
 	"fmt"
 )
 
 func main() {
-	opts := BitcaskDB.DefaultOperations
+	opts := FlexDB.DefaultOperations
 	//启动一个db实例
-	db, err := BitcaskDB.Open(opts)
+	db, err := FlexDB.Open(opts)
 	if err != nil {
 		panic(err)
 	}

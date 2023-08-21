@@ -1,9 +1,9 @@
-package BitcaskDB
+package FlexDB
 
 import (
-	"BitcaskDB/data"
-	"BitcaskDB/fio"
-	"BitcaskDB/utils"
+	"FlexDB/data"
+	"FlexDB/fio"
+	"FlexDB/utils"
 	"io"
 	"os"
 	"path"
@@ -296,8 +296,8 @@ func (db *DB) loadMergeFiles() error {
 
 	//该merge目录下的所有文件移动到正常的目录中
 	for _, fileName := range mergeFileNames {
-		//从bitcaskdb/mergedir    00.data     01.data
-		//移动到bitcaskdb/storefile  00.data   01.data
+		//从FlexDB/mergedir    00.data     01.data
+		//移动到FlexDB/storefile  00.data   01.data
 		srcPath := filepath.Join(mergePath, fileName)           //原路径
 		destPath := filepath.Join(db.options.DirPath, fileName) //新路径
 		//如果原目录已经存在fin文件的话，就对他进行重写覆盖，保存只有一个fin文件

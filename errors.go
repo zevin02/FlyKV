@@ -1,4 +1,4 @@
-package BitcaskDB
+package FlexDB
 
 import "errors"
 

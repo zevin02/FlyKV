@@ -1,7 +1,7 @@
-package BitcaskDB
+package FlexDB
 
 import (
-	"BitcaskDB/data"
+	"FlexDB/data"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
