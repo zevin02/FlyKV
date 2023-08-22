@@ -2,10 +2,11 @@ package main
 
 import (
 	"FlexDB"
-	"FlexDB/redis"
+	"FlexDB/redis/type"
 	"fmt"
 	"github.com/tidwall/redcon"
 	"strings"
+	"sync"
 )
 
 func newWrongNumberofArry(cmd string) error {
@@ -16,13 +17,16 @@ type cmdHandler func(cli *FlexClient, args [][]byte) (interface{}, error)
 
 //支持的命令
 var supportedCommands = map[string]cmdHandler{
-	"set": set,
-	"get": get,
+	"set":    set,
+	"get":    get,
+	"select": Select,
 }
 
 type FlexClient struct {
-	db  *redis.RedisDataStruct
-	svr *FlexServer
+	db      *_type.RedisDataStruct
+	svr     *FlexServer
+	dbIndex byte //用户使用的是哪个数据库,后期所有key都进行编码添加上所属的dbindex实例
+	mu      *sync.RWMutex
 }
 
 //command中就是用户提供的命令
@@ -33,7 +37,6 @@ func execClientCommand(conn redcon.Conn, cmd redcon.Command) {
 		switch command {
 		case "quit":
 			conn.Close()
-
 		case "ping":
 			conn.WriteString("PONG")
 		default:
@@ -54,28 +57,4 @@ func execClientCommand(conn redcon.Conn, cmd redcon.Command) {
 		return
 	}
 	conn.WriteAny(res)
-}
-
-func set(cli *FlexClient, args [][]byte) (interface{}, error) {
-	if len(args) != 2 {
-		return nil, newWrongNumberofArry("set")
-	}
-	key, val := args[0], args[1]
-	if err := cli.db.Set(key, 0, val); err != nil {
-		return nil, err
-	}
-	return redcon.SimpleString("OK"), nil
-
-}
-func get(cli *FlexClient, args [][]byte) (interface{}, error) {
-	if len(args) != 1 {
-		return nil, newWrongNumberofArry("set")
-	}
-	key := args[0]
-	res, err := cli.db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	return redcon.SimpleString(res), nil
-
 }

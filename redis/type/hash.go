@@ -1,4 +1,4 @@
-package redis
+package _type
 
 import (
 	"FlexDB"

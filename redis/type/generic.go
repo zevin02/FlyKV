@@ -1,4 +1,4 @@
-package redis
+package _type
 
 import (
 	"FlexDB"
@@ -10,6 +10,7 @@ type redisDataType = byte
 
 var (
 	ErrWrongTypeOperation = errors.New("wrong type operation")
+	ErrDbIndexOut         = errors.New("Err db index is out of range")
 )
 
 const (
