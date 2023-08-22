@@ -6,8 +6,11 @@ import (
 	"testing"
 )
 
+const DirPath = "/home/zevin/githubmanage/program/FlexDB/fortest"
+
 func TestDB_WriteBatch1(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)
@@ -42,6 +45,7 @@ func TestDB_WriteBatch1(t *testing.T) {
 //
 func TestDB_WriteBatch2(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)
@@ -78,6 +82,7 @@ func TestDB_WriteBatch2(t *testing.T) {
 //在commit之前中断掉，事务没有提交成功
 func TestDB_WriteBatch3(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)

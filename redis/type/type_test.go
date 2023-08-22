@@ -9,11 +9,14 @@ import (
 	"time"
 )
 
+const DirPath = "/home/zevin/githubmanage/program/FlexDB/for"
+
 //================String=======================
 func TestRedisDataStruct_Get(t *testing.T) {
 	opts := FlexDB.DefaultOperations
+	opts.DirPath = DirPath
 	defer func() {
-		os.RemoveAll(opts.DirPath)
+		os.RemoveAll(DirPath)
 	}()
 	rds, err := NewRedisDataStruct(opts)
 
@@ -32,8 +35,9 @@ func TestRedisDataStruct_Get(t *testing.T) {
 
 func TestRedisDataStruct_DEL(t *testing.T) {
 	opts := FlexDB.DefaultOperations
+	opts.DirPath = DirPath
 	defer func() {
-		os.RemoveAll(opts.DirPath)
+		os.RemoveAll(DirPath)
 	}()
 	rds, err := NewRedisDataStruct(opts)
 	assert.Nil(t, err)
@@ -50,8 +54,9 @@ func TestRedisDataStruct_DEL(t *testing.T) {
 
 func TestRedisDataStruct_HGet(t *testing.T) {
 	opts := FlexDB.DefaultOperations
+	opts.DirPath = DirPath
 	defer func() {
-		os.RemoveAll(opts.DirPath)
+		os.RemoveAll(DirPath)
 	}()
 	rds, err := NewRedisDataStruct(opts)
 
@@ -74,8 +79,9 @@ func TestRedisDataStruct_HGet(t *testing.T) {
 
 func TestRedisDataStruct_HDel(t *testing.T) {
 	opts := FlexDB.DefaultOperations
+	opts.DirPath = DirPath
 	defer func() {
-		os.RemoveAll(opts.DirPath)
+		os.RemoveAll(DirPath)
 	}()
 	rds, err := NewRedisDataStruct(opts)
 

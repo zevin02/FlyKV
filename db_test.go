@@ -25,6 +25,7 @@ func destroyDB(db *DB) {
 //测试btree
 func TestOpen1(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = Btree
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -35,6 +36,7 @@ func TestOpen1(t *testing.T) {
 //测试b+ tree
 func TestOpen2(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = BPT
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -45,6 +47,7 @@ func TestOpen2(t *testing.T) {
 //测试artree
 func TestOpen3(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = ART
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -55,6 +58,7 @@ func TestOpen3(t *testing.T) {
 //测试Btree
 func TestDB_Put1(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = Btree
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -113,6 +117,7 @@ func TestDB_Put1(t *testing.T) {
 //测试B+tree
 func TestDB_Put2(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = BPT
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -171,6 +176,7 @@ func TestDB_Put2(t *testing.T) {
 //测试ARTree
 func TestDB_Put3(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = ART
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -228,6 +234,7 @@ func TestDB_Put3(t *testing.T) {
 
 func TestDB_Get1(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -296,6 +303,7 @@ func TestDB_Get1(t *testing.T) {
 //测试ART
 func TestDB_Get2(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = ART
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -364,6 +372,7 @@ func TestDB_Get2(t *testing.T) {
 
 func TestDB_Get3(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.IndexType = BPT
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
@@ -432,6 +441,7 @@ func TestDB_Get3(t *testing.T) {
 
 func TestDB_Delete(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -479,6 +489,7 @@ func TestDB_Delete(t *testing.T) {
 
 func TestDB_ListKeys(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -507,6 +518,7 @@ func TestDB_ListKeys(t *testing.T) {
 
 func TestDB_Fold(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -530,6 +542,7 @@ func TestDB_Fold(t *testing.T) {
 
 func TestDB_Close(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -540,6 +553,7 @@ func TestDB_Close(t *testing.T) {
 }
 func TestDB_Sync(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -553,6 +567,7 @@ func TestDB_Sync(t *testing.T) {
 
 func TestDB_FileLock(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -574,6 +589,7 @@ func TestDB_FileLock(t *testing.T) {
 
 func TestDB_Stat(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -596,6 +612,7 @@ func TestDB_Stat(t *testing.T) {
 
 func TestDB_BackUp(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)

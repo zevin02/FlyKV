@@ -5,6 +5,7 @@ import (
 	"FlexDB/fio"
 	"FlexDB/utils"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -27,11 +28,15 @@ type MergeInfo struct {
 //Merge 清理无效数据，生成hint文件
 //if reLoad is true ,db will reload file and index
 func (db *DB) Merge(reLoad bool) error {
+	log.Println("FlexDB merge start")
+
 	//执行merge操作
 	if err := db.doMerge(); err != nil {
 		return err
 	}
 	if !reLoad {
+		log.Println("FlexDB merge finish")
+
 		return nil
 	}
 	db.mu.Lock()

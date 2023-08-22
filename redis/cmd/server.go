@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"FlexDB"
@@ -13,24 +13,22 @@ const addr = "127.0.0.1:6380"
 type FlexServer struct {
 	db     *_type.RedisDataStruct //用户的数据库，允许开16个
 	server *redcon.Server
-	mu     sync.RWMutex
+	mu     *sync.RWMutex
 }
 
-func main() {
+func NewServer() (*FlexServer, error) {
 	//默认是打开redis数据结构的服务
 	rds, err := _type.NewRedisDataStruct(FlexDB.DefaultOperations)
 	if err != nil {
 		panic(err)
 	}
-	dbSvr := FlexServer{}
-	//初始化16个db
-
-	dbSvr.db = rds
-
-	//初始化redis服务器,设置建立连接的回调函数,断开连接的回调函数，以及客户端进来执行的回调函数
+	dbSvr := &FlexServer{
+		db: rds,
+		mu: new(sync.RWMutex),
+	}
 	dbSvr.server = redcon.NewServer(addr, execClientCommand, dbSvr.Accept, dbSvr.Close)
-	dbSvr.Listen()
 
+	return dbSvr, nil
 }
 
 func (svr *FlexServer) Listen() {

@@ -12,6 +12,7 @@ import (
 //没有任何数据的情况下进行merge
 func TestDB_Merge(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.Nil(t, err)
@@ -23,6 +24,7 @@ func TestDB_Merge(t *testing.T) {
 //全部都是有效数据
 func TestDB_Merge2(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)
@@ -58,6 +60,7 @@ func TestDB_Merge3(t *testing.T) {
 	opts := DefaultOperations
 	//TODO test b+ index
 	//opts.IndexType = BPT
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)
@@ -104,6 +107,7 @@ func TestDB_Merge3(t *testing.T) {
 //全部是无效的数据
 func TestDB_Merge4(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)
@@ -139,6 +143,7 @@ func TestDB_Merge4(t *testing.T) {
 
 func TestDB_Merge5(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)
@@ -185,6 +190,7 @@ func TestDB_Merge5(t *testing.T) {
 //全部是无效的数据
 func TestDB_Merge6(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)
@@ -209,6 +215,7 @@ func TestDB_Merge6(t *testing.T) {
 //有失败数据和被重复put的数据
 func TestDB_Merge7(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	//TODO test b+ index
 	//opts.IndexType = BPT
 	opts.FileSize = 32 * 1024 * 1024
@@ -249,6 +256,7 @@ func TestDB_Merge7(t *testing.T) {
 //全部都是有效数据
 func TestDB_Merge8(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)
@@ -277,6 +285,7 @@ func TestDB_Merge8(t *testing.T) {
 
 func TestDB_Merge9(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	opts.FileSize = 32 * 1024 * 1024
 	opts.DataFileMergeRatio = 0 //不设置失效的阈值
 	db, err := Open(opts)

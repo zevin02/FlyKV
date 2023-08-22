@@ -9,6 +9,7 @@ import (
 //迭代器使用完需要关闭掉
 func TestDB_NewIterator_One_Value(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)
@@ -28,6 +29,7 @@ func TestDB_NewIterator_One_Value(t *testing.T) {
 
 func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	opts := DefaultOperations
+	opts.DirPath = DirPath
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)
