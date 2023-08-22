@@ -36,6 +36,11 @@ func NewRedisDataStruct(options FlexDB.Options) (*RedisDataStruct, error) {
 
 }
 
+func (rds RedisDataStruct) Close() error {
+	return rds.db.Close()
+
+}
+
 //==================generic command=============================
 
 //不会影响数据的可见性

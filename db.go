@@ -287,23 +287,10 @@ func (db *DB) Close() error {
 	}
 
 	//保存当前的事务序列号，B+树需要
-	seqNoFile, err := data.OpenSeqNoFile(db.options.DirPath)
-	if err != nil {
+	if err := db.saveSeqNo(); err != nil {
 		return err
 	}
-	record := &data.LogRecord{
-		Key:   []byte(seqNoKey),
-		Value: []byte(strconv.FormatUint(db.seqNo, 10)),
-	}
-	encRecord, _ := data.EncodeLogRecord(record)
-
-	if err := seqNoFile.Write(encRecord); err != nil {
-		return err
-	}
-	if err := seqNoFile.Sync(); err != nil {
-		return err
-	}
-
+	//关闭活跃文件和老文件
 	if err := db.closeFiles(); err != nil {
 		return err
 	}
@@ -648,6 +635,30 @@ func (db *DB) closeFiles() error {
 		if err := file.Close(); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (db *DB) saveSeqNo() error {
+	seqNoFile, err := data.OpenSeqNoFile(db.options.DirPath)
+	if err != nil {
+		return err
+	}
+	record := &data.LogRecord{
+		Key:   []byte(seqNoKey),
+		Value: []byte(strconv.FormatUint(db.seqNo, 10)),
+	}
+	encRecord, _ := data.EncodeLogRecord(record)
+
+	if err := seqNoFile.Write(encRecord); err != nil {
+		return err
+	}
+	if err := seqNoFile.Sync(); err != nil {
+		return err
+	}
+	if err := seqNoFile.Close(); err != nil {
+		return nil
 	}
 	return nil
 }
