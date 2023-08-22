@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
+//================String=======================
 func TestRedisDataStruct_Get(t *testing.T) {
 	opts := FlexDB.DefaultOperations
 	defer func() {
-
 		os.RemoveAll(opts.DirPath)
 	}()
 	rds, err := NewRedisDataStruct(opts)
@@ -46,5 +46,67 @@ func TestRedisDataStruct_DEL(t *testing.T) {
 	assert.Nil(t, val1)
 	assert.Equal(t, FlexDB.ErrKeyNotFound, err)
 	rds.db.Close()
+}
 
+func TestRedisDataStruct_HGet(t *testing.T) {
+	opts := FlexDB.DefaultOperations
+	defer func() {
+		os.RemoveAll(opts.DirPath)
+	}()
+	rds, err := NewRedisDataStruct(opts)
+
+	ok1, err := rds.HSet(utils.GetTestKey(1), []byte("field1"), utils.RandomValue(100))
+	assert.Nil(t, err)
+	assert.True(t, ok1)
+	v1 := utils.RandomValue(100)
+	ok2, err := rds.HSet(utils.GetTestKey(1), []byte("field1"), v1)
+	assert.Nil(t, err)
+	assert.False(t, ok2)
+	val1, err := rds.HGet(utils.GetTestKey(1), []byte("field1"))
+	assert.Equal(t, v1, val1)
+
+	v2 := utils.RandomValue(100)
+	ok3, err := rds.HSet(utils.GetTestKey(1), []byte("field2"), v2)
+	assert.True(t, ok3)
+	val2, err := rds.HGet(utils.GetTestKey(1), []byte("field2"))
+	assert.Equal(t, v2, val2)
+}
+
+func TestRedisDataStruct_HDel(t *testing.T) {
+	opts := FlexDB.DefaultOperations
+	defer func() {
+		os.RemoveAll(opts.DirPath)
+	}()
+	rds, err := NewRedisDataStruct(opts)
+
+	ok1, err := rds.HSet(utils.GetTestKey(1), []byte("field1"), utils.RandomValue(100))
+	assert.Nil(t, err)
+	assert.True(t, ok1)
+	v1 := utils.RandomValue(100)
+	ok2, err := rds.HSet(utils.GetTestKey(1), []byte("field1"), v1)
+	assert.Nil(t, err)
+	assert.False(t, ok2)
+	val1, err := rds.HGet(utils.GetTestKey(1), []byte("field1"))
+	assert.Equal(t, v1, val1)
+
+	v2 := utils.RandomValue(100)
+	ok3, err := rds.HSet(utils.GetTestKey(1), []byte("field2"), v2)
+	assert.True(t, ok3)
+	val2, err := rds.HGet(utils.GetTestKey(1), []byte("field2"))
+	assert.Equal(t, v2, val2)
+	assert.Nil(t, err)
+
+	ok4, err := rds.HDel(utils.GetTestKey(1), []byte("field1"))
+	assert.True(t, ok4)
+	assert.Nil(t, err)
+	//删除不存在的key
+
+	ok5, err := rds.HDel(utils.GetTestKey(1), []byte("field4"))
+	assert.False(t, ok5)
+	assert.Nil(t, err)
+
+	ok6, err := rds.HDel(utils.GetTestKey(1), []byte("field2"))
+	assert.Nil(t, err)
+
+	assert.True(t, ok6)
 }

@@ -1,35 +1,9 @@
 package redis
 
 import (
-	"FlexDB"
 	"encoding/binary"
-	"errors"
 	"time"
 )
-
-type redisDataType = byte
-
-var (
-	ErrWrongTypeOperation = errors.New("wrong type operation")
-)
-
-const (
-	String redisDataType = iota + 1
-)
-
-type RedisDataStruct struct {
-	db *FlexDB.DB
-}
-
-// NewRedisDataStruct 初始化Redis数据结构服务
-func NewRedisDataStruct(options FlexDB.Options) (*RedisDataStruct, error) {
-	db, err := FlexDB.Open(options)
-	if err != nil {
-		return nil, err
-	}
-	return &RedisDataStruct{db: db}, nil
-
-}
 
 //==================string===================
 
