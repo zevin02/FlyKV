@@ -25,3 +25,21 @@ func Select(cli *FlexClient, args [][]byte) (interface{}, error) {
 	return redcon.SimpleString("OK"), nil
 
 }
+
+func Del(cli *FlexClient, args [][]byte) (interface{}, error) {
+	if len(args) != 1 {
+		return nil, common.NewWrongNumberofArry("del")
+	}
+	key := args[0]
+	ok, err := cli.db.Del(common.EncodeKeyWithIndex(key, cli.dbIndex))
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return redcon.SimpleInt(1), nil
+	} else {
+		return redcon.SimpleInt(0), nil
+
+	}
+
+}

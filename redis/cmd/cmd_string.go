@@ -17,6 +17,7 @@ func Set(cli *FlexClient, args [][]byte) (interface{}, error) {
 	}
 	return redcon.SimpleString("OK"), nil
 }
+
 func Get(cli *FlexClient, args [][]byte) (interface{}, error) {
 	if len(args) != 1 {
 		return nil, common.NewWrongNumberofArry("get")

@@ -230,15 +230,15 @@ func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
 
 }
 
-//根据key删除对应的数据
-func (db *DB) Delete(key []byte) error {
+//根据key删除对应的数据,如果存在的话，返回true，否则返回失败
+func (db *DB) Delete(key []byte) (bool, error) {
 	if len(key) == 0 {
-		return ErrKeyIsEmpty
+		return false, ErrKeyIsEmpty
 	}
 	//在内存索引中查找这个key是否存在,避免用户一致调用delete方法去删除一个不存在的key，导致磁盘文件膨胀
 	if pos := db.index.Get(key); pos == nil {
 		//当前key不存在，直接返回
-		return nil
+		return false, nil
 	}
 
 	//构造LogRecord标识其是被删除的
@@ -249,24 +249,24 @@ func (db *DB) Delete(key []byte) error {
 	//写入到数据文件中
 	pos, err := db.appendLogRecordWithLock(logRecord)
 	if err != nil {
-		return err
+		return false, err
 	}
 	//删除的这个数据本身也是无效数据存储在磁盘中,也是可以删除的
 	db.reclaimSize += uint64(pos.Size)
 
 	if err != nil {
-		return err
+		return false, err
 	}
 	//在内存索引中将对应的key删除掉
 	oldPos, ok := db.index.Delete(key)
 
 	if !ok {
-		return ErrIndexUpdateFailed
+		return false, ErrIndexUpdateFailed
 	}
 	if oldPos != nil {
 		db.reclaimSize += uint64(oldPos.Size)
 	}
-	return nil
+	return true, nil
 }
 
 // Close 关闭数据库,清空所有的资源

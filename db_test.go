@@ -264,7 +264,7 @@ func TestDB_Get1(t *testing.T) {
 	//4.值被删除后再Get
 	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
 	assert.Nil(t, err)
-	err = db.Delete(utils.GetTestKey(22))
+	_, err = db.Delete(utils.GetTestKey(22))
 	val4, err := db.Get(utils.GetTestKey(22))
 	assert.Equal(t, ErrKeyNotFound, err)
 	assert.Equal(t, 0, len(val4))
@@ -334,7 +334,7 @@ func TestDB_Get2(t *testing.T) {
 	//4.值被删除后再Get
 	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
 	assert.Nil(t, err)
-	err = db.Delete(utils.GetTestKey(22))
+	_, err = db.Delete(utils.GetTestKey(22))
 	val4, err := db.Get(utils.GetTestKey(22))
 	assert.Equal(t, ErrKeyNotFound, err)
 	assert.Equal(t, 0, len(val4))
@@ -403,7 +403,7 @@ func TestDB_Get3(t *testing.T) {
 	//4.值被删除后再Get
 	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
 	assert.Nil(t, err)
-	err = db.Delete(utils.GetTestKey(22))
+	_, err = db.Delete(utils.GetTestKey(22))
 	val4, err := db.Get(utils.GetTestKey(22))
 	assert.Equal(t, ErrKeyNotFound, err)
 	assert.Equal(t, 0, len(val4))
@@ -451,23 +451,23 @@ func TestDB_Delete(t *testing.T) {
 	//1.正常删除一个存在的key
 	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
 	assert.Nil(t, err)
-	err = db.Delete(utils.GetTestKey(22))
+	_, err = db.Delete(utils.GetTestKey(22))
 	assert.Nil(t, err)
 	_, err = db.Get(utils.GetTestKey(22))
 	assert.Equal(t, ErrKeyNotFound, err)
 
 	//2.删除一个不存在的key
-	err = db.Delete([]byte("unknow key"))
+	_, err = db.Delete([]byte("unknow key"))
 	assert.Nil(t, err)
 
 	//3.删除一个空的key
-	err = db.Delete(nil)
+	_, err = db.Delete(nil)
 	assert.Equal(t, ErrKeyIsEmpty, err)
 
 	//4.值被删除之后重新put
 	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
 	assert.Nil(t, err)
-	err = db.Delete(utils.GetTestKey(22))
+	_, err = db.Delete(utils.GetTestKey(22))
 	assert.Nil(t, err)
 	err = db.Put(utils.GetTestKey(22), utils.RandomValue(24))
 	assert.Nil(t, err)
@@ -600,7 +600,7 @@ func TestDB_Stat(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	for i := 0; i < 1000000; i++ {
-		err = db.Delete(utils.GetTestKey(i))
+		_, err = db.Delete(utils.GetTestKey(i))
 		assert.Nil(t, err)
 	}
 	for i := 100; i < 2000; i++ {

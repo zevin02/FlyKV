@@ -85,10 +85,10 @@ func (db *DB) doMerge() error {
 		db.mu.Unlock()
 		return err
 	}
-	if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
-		db.mu.Unlock()
-		return ErrMergeRatioUnReached
-	}
+	//if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
+	//	db.mu.Unlock()
+	//	return ErrMergeRatioUnReached
+	//}
 	//查看剩余容量是否可以容纳merge之后的数据量
 	availableDiskSize, err := utils.AvailableDiskSize()
 	if err != nil {

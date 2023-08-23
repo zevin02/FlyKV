@@ -44,8 +44,9 @@ func (rds RedisDataStruct) Close() error {
 
 //==================generic command=============================
 
-//不会影响数据的可见性
-func (rds *RedisDataStruct) Del(key []byte) error {
+//不会影响数据的可见性,对于hash来说，删除了元数据就获得不到元数据的version,就无法通过这version来构造key访问数据库其中
+func (rds *RedisDataStruct) Del(key []byte) (bool, error) {
+
 	return rds.db.Delete(key)
 }
 

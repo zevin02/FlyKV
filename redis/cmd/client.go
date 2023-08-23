@@ -8,14 +8,7 @@ import (
 	"sync"
 )
 
-type cmdHandler func(cli *FlexClient, args [][]byte) (interface{}, error)
-
-//支持的命令
-var supportedCommands = map[string]cmdHandler{
-	"set":    Set,
-	"get":    Get,
-	"select": Select,
-}
+//type cmdHandler func(cli *FlexClient, args [][]byte) (interface{}, error)
 
 type FlexClient struct {
 	db      *_type.RedisDataStruct
@@ -32,6 +25,7 @@ func execClientCommand(conn redcon.Conn, cmd redcon.Command) {
 		execGeneralRedisCommand(command, conn)
 		return
 	}
+
 	//拿出客户端
 	client, _ := conn.Context().(*FlexClient)
 

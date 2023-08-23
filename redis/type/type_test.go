@@ -41,10 +41,10 @@ func TestRedisDataStruct_DEL(t *testing.T) {
 	}()
 	rds, err := NewRedisDataStruct(opts)
 	assert.Nil(t, err)
-	err = rds.Del(utils.GetTestKey(11))
+	_, err = rds.Del(utils.GetTestKey(11))
 	assert.Nil(t, err)
 	assert.Nil(t, rds.Set(utils.GetTestKey(11), 0, []byte("utils.RandomValue(100)")))
-	err = rds.Del(utils.GetTestKey(11))
+	_, err = rds.Del(utils.GetTestKey(11))
 	assert.Nil(t, err)
 	val1, err := rds.Get(utils.GetTestKey(11))
 	assert.Nil(t, val1)
@@ -115,4 +115,22 @@ func TestRedisDataStruct_HDel(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.True(t, ok6)
+}
+
+func TestRedisDataStruct_Del(t *testing.T) {
+	opts := FlexDB.DefaultOperations
+	opts.DirPath = DirPath
+	defer func() {
+		os.RemoveAll(DirPath)
+	}()
+	rds, _ := NewRedisDataStruct(opts)
+	//hash的所有领域都要删除
+	rds.HSet([]byte("k"), []byte("A"), []byte("utils.RandomValue(100)"))
+	rds.HSet([]byte("k"), []byte("B"), []byte("utils.RandomValue(101)"))
+	rds.HSet([]byte("k"), []byte("C"), []byte("utils.RandomValue(102)"))
+	rds.HSet([]byte("g"), []byte("D"), []byte("utils.RandomValue(102)"))
+	rds.Del([]byte("k"))
+	//TODO hash中的key删除掉后需要在磁盘中删除相同前缀的key
+	err := rds.db.Merge(true)
+	t.Log(err)
 }

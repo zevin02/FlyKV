@@ -72,7 +72,7 @@ func TestDB_Merge3(t *testing.T) {
 	}
 	//删除部分数据
 	for i := 0; i < 10000; i++ {
-		err := db.Delete(utils.GetTestKey(i))
+		_, err := db.Delete(utils.GetTestKey(i))
 		assert.Nil(t, err)
 	}
 	for i := 40000; i < 50000; i++ {
@@ -118,7 +118,7 @@ func TestDB_Merge4(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	for i := 0; i < 50000; i++ {
-		err := db.Delete(utils.GetTestKey(i))
+		_, err := db.Delete(utils.GetTestKey(i))
 		assert.Nil(t, err)
 	}
 	err = db.Merge(false)
@@ -159,7 +159,7 @@ func TestDB_Merge5(t *testing.T) {
 	go func() {
 		defer wg.Done() //表示当前goruntine执行未成
 		for i := 0; i < 50000; i++ {
-			err := db.Delete(utils.GetTestKey(i))
+			_, err := db.Delete(utils.GetTestKey(i))
 			assert.Nil(t, err)
 		}
 		for i := 60000; i < 70000; i++ {
@@ -201,7 +201,7 @@ func TestDB_Merge6(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	for i := 0; i < 50000; i++ {
-		err := db.Delete(utils.GetTestKey(i))
+		_, err := db.Delete(utils.GetTestKey(i))
 		assert.Nil(t, err)
 	}
 	err = db.Merge(true)
@@ -229,7 +229,7 @@ func TestDB_Merge7(t *testing.T) {
 	}
 	//删除部分数据
 	for i := 0; i < 10000; i++ {
-		err := db.Delete(utils.GetTestKey(i))
+		_, err := db.Delete(utils.GetTestKey(i))
 		assert.Nil(t, err)
 	}
 	for i := 40000; i < 50000; i++ {

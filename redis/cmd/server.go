@@ -10,13 +10,14 @@ import (
 
 const addr = "127.0.0.1:6380"
 
+type cmdHandler func(cli *FlexClient, args [][]byte) (interface{}, error)
+
 type FlexServer struct {
-	db     *_type.RedisDataStruct //用户的数据库，允许开16个
-	server *redcon.Server
-	mu     *sync.RWMutex
+	db *_type.RedisDataStruct //用户的数据库，允许开16个
+	mu *sync.RWMutex
 }
 
-func NewServer() (*FlexServer, error) {
+func NewFlexServer() (*FlexServer, error) {
 	//默认是打开redis数据结构的服务
 	rds, err := _type.NewRedisDataStruct(FlexDB.DefaultOperations)
 	if err != nil {
@@ -26,17 +27,15 @@ func NewServer() (*FlexServer, error) {
 		db: rds,
 		mu: new(sync.RWMutex),
 	}
-	dbSvr.server = redcon.NewServer(addr, execClientCommand, dbSvr.Accept, dbSvr.Close)
-
+	err = redcon.ListenAndServe(addr, execClientCommand, dbSvr.Accept, dbSvr.Close)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("FlexDB server running,ready to accept connection")
 	return dbSvr, nil
 }
 
-func (svr *FlexServer) Listen() {
-	log.Println("FlexDB server running,ready to accept connection")
-	svr.server.ListenAndServe()
-}
-
-//传递连接进来
+// Accept 传递连接进来
 func (svr *FlexServer) Accept(conn redcon.Conn) bool {
 	cli := new(FlexClient)
 	svr.mu.Lock()
@@ -48,8 +47,7 @@ func (svr *FlexServer) Accept(conn redcon.Conn) bool {
 	return true
 }
 
-//关闭实例
+// Close 关闭实例
 func (svr *FlexServer) Close(conn redcon.Conn, err error) {
 	svr.db.Close()
-	svr.server.Close()
 }
