@@ -11,6 +11,7 @@
 tmp
 storefile
 *.rdb
+./for*
 # Test binary, built with `go test -c`
 *.test
 

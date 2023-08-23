@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"stathat.com/c/consistent"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,7 +28,8 @@ type DB struct {
 	mu                     *sync.RWMutex
 	activeFile             *data.DataFile            //当前活跃文件，可以用来写入,在loaddatafile的时候，活跃文件和老文件都会被初始化
 	olderFile              map[uint32]*data.DataFile //旧的数据文件，用来读取
-	index                  index.Indexer             //数据的内存索引
+	hashRing               *consistent.Consistent    //一致性哈希环，用来
+	index                  map[string]index.Indexer  //数据的内存索引
 	seqNo                  uint64                    //事务序列号，全局递增
 	seqNoFileExists        bool                      //存储事务序列号的文件是否存在
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
@@ -74,11 +76,13 @@ func Open(options Options) (*DB, error) {
 		options:                options,
 		mu:                     new(sync.RWMutex),
 		olderFile:              make(map[uint32]*data.DataFile),
-		index:                  index.NewIndex(options.IndexType, options.DirPath, options.SyncWrite), //初始化内存索引
+		hashRing:               consistent.New(),                                 //
+		index:                  make(map[string]index.Indexer, options.indexNum), //初始化内存索引
 		seqNo:                  nonTransactionSeq,
 		isInitialDBInitialized: isInitial,
 		fileLock:               fileFlock,
 	}
+	db.initIndex()
 	//加载merge数据目录,将merge目录下的数据都移动过来
 	if err := db.loadMergeFiles(); err != nil {
 		return nil, err
@@ -143,7 +147,11 @@ func (db *DB) Put(key []byte, value []byte) error {
 		return err
 	}
 	//获得索引信息，更新内存索引,内存索引中的key就是用户的key，没有进行任何的编码
-	if oldPos := db.index.Put(key, pos); oldPos != nil {
+	node, err := db.hashRing.Get(string(key)) //获得对应实例
+	if err != nil {
+		return err
+	}
+	if oldPos := db.index[node].Put(key, pos); oldPos != nil {
 		//如果有数据，则出现无效数据，存在磁盘里，但内存中已更新。
 		db.reclaimSize += uint64(oldPos.Size)
 	}
@@ -159,7 +167,11 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 		return nil, ErrKeyIsEmpty
 	}
 	//从内存中拿出索引位置信息
-	logRecordPos := db.index.Get(key)
+	node, err := db.hashRing.Get(string(key)) //获得对应实例
+	if err != nil {
+		return nil, err
+	}
+	logRecordPos := db.index[node].Get(key)
 	if logRecordPos == nil {
 		return nil, ErrKeyNotFound
 	}
@@ -198,12 +210,16 @@ func (db *DB) getValueByPos(logRecordPos *data.LogRecordPos) ([]byte, error) {
 
 //ListKeys 获取数据中所有的key
 func (db *DB) ListKeys() [][]byte {
-	iter := db.index.Iterator(false)
-	keys := make([][]byte, db.index.Size())
-	var idx int = 0
-	for iter.Rewind(); iter.Valid(); iter.Next() {
-		keys[idx] = iter.Key()
-		idx++
+	keys := [][]byte{}
+	for i := 0; i < db.options.indexNum; i++ {
+		node := "index" + strconv.Itoa(i) //遍历所有索引
+		iter := db.index[node].Iterator(false)
+		//var idx int = 0
+		for iter.Rewind(); iter.Valid(); iter.Next() {
+			//keys[idx] = iter.Key()
+			keys = append(keys, iter.Key())
+			//idx++
+		}
 	}
 	return keys
 }
@@ -212,19 +228,22 @@ func (db *DB) ListKeys() [][]byte {
 func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	iterator := db.index.Iterator(false)
-	//使用完需要将他关闭掉,避免读写阻塞住
-	defer iterator.Close()
-	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
-		val, err := db.getValueByPos(iterator.Value())
-		if err != nil {
-			return err
-		}
-		//如果不满足用户需求就跳出循环
-		if !fn(iterator.Key(), val) {
-			break
-		}
+	for i := 0; i < db.options.indexNum; i++ {
+		node := "index" + strconv.Itoa(i)
+		iterator := db.index[node].Iterator(false)
+		//使用完需要将他关闭掉,避免读写阻塞住
+		defer iterator.Close()
+		for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+			val, err := db.getValueByPos(iterator.Value())
+			if err != nil {
+				return err
+			}
+			//如果不满足用户需求就跳出循环
+			if !fn(iterator.Key(), val) {
+				break
+			}
 
+		}
 	}
 	return nil
 
@@ -236,7 +255,11 @@ func (db *DB) Delete(key []byte) (bool, error) {
 		return false, ErrKeyIsEmpty
 	}
 	//在内存索引中查找这个key是否存在,避免用户一致调用delete方法去删除一个不存在的key，导致磁盘文件膨胀
-	if pos := db.index.Get(key); pos == nil {
+	node, err := db.hashRing.Get(string(key)) //获得对应实例
+	if err != nil {
+		return false, err
+	}
+	if pos := db.index[node].Get(key); pos == nil {
 		//当前key不存在，直接返回
 		return false, nil
 	}
@@ -258,7 +281,7 @@ func (db *DB) Delete(key []byte) (bool, error) {
 		return false, err
 	}
 	//在内存索引中将对应的key删除掉
-	oldPos, ok := db.index.Delete(key)
+	oldPos, ok := db.index[node].Delete(key)
 
 	if !ok {
 		return false, ErrIndexUpdateFailed
@@ -282,10 +305,12 @@ func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	//关闭索引
-	if err := db.index.Close(); err != nil {
-		return err
+	for i := 0; i < db.options.indexNum; i++ {
+		node := "index" + strconv.Itoa(i)
+		if err := db.index[node].Close(); err != nil {
+			return err
+		}
 	}
-
 	//保存当前的事务序列号，B+树需要
 	if err := db.saveSeqNo(); err != nil {
 		return err
@@ -319,7 +344,7 @@ func (db *DB) Stat() *Stat {
 		return nil
 	}
 	return &Stat{
-		KeyNum:          db.index.Size(),
+		//KeyNum:          db.index.Size(),
 		DataFileNum:     dataFiles,
 		ReclaimableSize: db.reclaimSize,
 		DiskSize:        totalSize,
@@ -483,13 +508,15 @@ func (db *DB) loadIndexFromDataFiles() error {
 
 	//更新内存索引,
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
+		node, _ := db.hashRing.Get(string(key)) //获得对应实例
+
 		var oldPos *data.LogRecordPos
 		if typ == data.LogRecordDeleted {
-			oldPos, _ = db.index.Delete(key)
+			oldPos, _ = db.index[node].Delete(key)
 			db.reclaimSize += uint64(pos.Size)
 
 		} else {
-			oldPos = db.index.Put(key, pos)
+			oldPos = db.index[node].Put(key, pos)
 		}
 		//如果构建索引的时候，这个key之前已经被存在了，那么这个key之前的数据就是无效的，可以进行清理
 		if oldPos != nil {
@@ -661,4 +688,16 @@ func (db *DB) saveSeqNo() error {
 		return nil
 	}
 	return nil
+}
+
+//初始化索引
+func (db *DB) initIndex() {
+	// 添加5个索引节点
+	for i := 0; i < db.options.indexNum; i++ {
+		node := "index" + strconv.Itoa(i)
+		db.hashRing.Add(node)
+
+		db.index[node] = index.NewIndex(db.options.IndexType, db.options.DirPath, node, db.options.SyncWrite) //初始化内存索引
+	}
+
 }

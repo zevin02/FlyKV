@@ -175,8 +175,11 @@ func (db *DB) doMerge() error {
 			}
 			//解析拿到实际的key,这里我们就不需要使用到事务，因为每一条数据都是有效的了,被重写的
 			realKey, _ := parseLogRecordKey(logRecord.Key)
-
-			logRecordPos := db.index.Get(realKey)
+			node, err := db.hashRing.Get(string(realKey)) //获得对应实例
+			if err != nil {
+				return err
+			}
+			logRecordPos := db.index[node].Get(realKey)
 			//和内存中的索引位置进行比较，如果有效就进行重写
 			if logRecordPos != nil &&
 				logRecordPos.Fid == dataFile.FileId &&
@@ -360,9 +363,12 @@ func (db *DB) loadIndexFromHintFile() error {
 		}
 		//解码获得位置信息
 		hintPos := data.DecodeLogRecordPos(record.Value) //获得hint中的索引信息
-
+		node, err := db.hashRing.Get(string(record.Key)) //获得对应实例
+		if err != nil {
+			return err
+		}
 		//根据位置信息来构建索引
-		db.index.Put(record.Key, hintPos)
+		db.index[node].Put(record.Key, hintPos)
 		offset += size
 	}
 	return nil

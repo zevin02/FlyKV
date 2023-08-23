@@ -55,9 +55,12 @@ func (wb *WriteBatch) Delete(key []byte) error {
 	}
 	wb.mu.Lock()
 	defer wb.mu.Unlock()
-
+	node, err := wb.db.hashRing.Get(string(key)) //获得对应实例
+	if err != nil {
+		return err
+	}
 	//先在内存索引中查看数据是否存在
-	logRecordPos := wb.db.index.Get(key)
+	logRecordPos := wb.db.index[node].Get(key)
 	if logRecordPos == nil {
 		//数据不存在
 		if wb.pendingWrite[string(key)] != nil {
@@ -124,15 +127,19 @@ func (wb *WriteBatch) Commit() error {
 	}
 	//根据前面append获得的postion映射，来更新内存索引
 	for _, record := range wb.pendingWrite {
-		pos := postions[string(record.Key)] //获得该数据的位置信息
+		pos := postions[string(record.Key)]                 //获得该数据的位置信息
+		node, err := wb.db.hashRing.Get(string(record.Key)) //获得对应实例
+		if err != nil {
+			return err
+		}
 		var oldPos *data.LogRecordPos
 		if record.Type == data.LogRecordNormal {
 			//正常数据，就正常进行更新
-			oldPos = wb.db.index.Put(record.Key, pos)
+			oldPos = wb.db.index[node].Put(record.Key, pos)
 		}
 		if record.Type == data.LogRecordDeleted {
 			//数据需要从内存中进行一个删除
-			oldPos, _ = wb.db.index.Delete(record.Key)
+			oldPos, _ = wb.db.index[node].Delete(record.Key)
 
 		}
 		if oldPos != nil {

@@ -16,11 +16,11 @@ type BPlusTree struct {
 	tree *bbolt.DB //内部封转了锁，可以实现并发访问
 }
 
-func NewBPT(dirPath string, syncWrite bool) *BPlusTree {
+func NewBPT(dirPath, indexNum string, syncWrite bool) *BPlusTree {
 	//打开一个文件来存储这些数据,先保证这个目录是存在的
 	opts := bbolt.DefaultOptions
 	opts.NoSync = !syncWrite
-	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, opts)
+	bptree, err := bbolt.Open(filepath.Join(dirPath, indexNum), 0644, opts)
 	if err != nil {
 		return nil
 	}

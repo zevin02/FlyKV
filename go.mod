@@ -19,4 +19,5 @@ require (
 	github.com/tidwall/redcon v1.6.2 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	stathat.com/c/consistent v1.0.0 // indirect
 )

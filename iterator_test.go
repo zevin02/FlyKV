@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-//迭代器使用完需要关闭掉
+迭代器使用完需要关闭掉
 func TestDB_NewIterator_One_Value(t *testing.T) {
 	opts := DefaultOperations
 	opts.DirPath = DirPath

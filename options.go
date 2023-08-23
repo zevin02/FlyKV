@@ -6,6 +6,7 @@ type Options struct {
 	SyncWrite   bool      //是否在每次写都进行持久化
 	IndexType   IndexType //索引类型
 	BytePerSync uint64    //累积写了多少字节后进行持久化
+	indexNum    int       //索引的个数
 	//TODO 添加后台线程来处理
 	TimeSync           uint    //每隔多少秒就进行一次持久化
 	MMapAtStartup      bool    //在启动的时候使用使用mmap来加载
@@ -28,6 +29,7 @@ var DefaultOperations = Options{
 	FileSize:           256 * 1024 * 1024, //256MB
 	SyncWrite:          false,
 	IndexType:          Btree,
+	indexNum:           5,
 	BytePerSync:        0,
 	TimeSync:           0,
 	MMapAtStartup:      true,

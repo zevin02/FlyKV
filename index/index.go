@@ -35,14 +35,14 @@ const (
 )
 
 //NewIndex 工厂函数，用来创建不同类新的索引
-func NewIndex(typ IndexType, dirPath string, sync bool) Indexer {
+func NewIndex(typ IndexType, dirPath, indexNum string, sync bool) Indexer {
 	switch typ {
 	case Btree:
 		return NewBtree()
 	case ART:
 		return NewART()
 	case BPT:
-		return NewBPT(dirPath, sync)
+		return NewBPT(dirPath, indexNum, sync)
 	default:
 		panic("unsupported index type")
 	}
