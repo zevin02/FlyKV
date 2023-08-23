@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-迭代器使用完需要关闭掉
+//迭代器使用完需要关闭掉
 func TestDB_NewIterator_One_Value(t *testing.T) {
 	opts := DefaultOperations
 	opts.DirPath = DirPath
@@ -50,10 +50,13 @@ func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	assert.NotNil(t, iter)
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		assert.NotNil(t, iter.Key())
+		t.Log(string(iter.Key()))
+
 	}
 	iter.Rewind()
 	for iter.Seek([]byte("a")); iter.Valid(); iter.Next() {
 		assert.NotNil(t, iter.Key())
+		//t.Log(string(iter.Key()))
 	}
 	//反向迭代
 	opts1 := DefaultIteratorOptions
