@@ -55,7 +55,7 @@ func Benchmark_Delete(b *testing.B) {
 	b.ReportAllocs() //可以打印出内存分配的情况
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < b.N; i++ {
-		err := db.Delete(utils.GetTestKey(rand.Int()))
+		_, err := db.Delete(utils.GetTestKey(rand.Int()))
 		assert.Nil(b, err)
 	}
 

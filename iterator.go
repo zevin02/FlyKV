@@ -6,6 +6,8 @@ import (
 	"container/heap"
 )
 
+var maxHeap bool
+
 //供用户使用的迭代器
 type Iterator struct {
 	options    IteratorOptions
@@ -27,7 +29,12 @@ func (h ItemHeap) Len() int {
 }
 
 func (h ItemHeap) Less(i, j int) bool {
-	return bytes.Compare(h[i].key, h[j].key) <= 0
+	if maxHeap {
+		return bytes.Compare(h[i].key, h[j].key) >= 0
+
+	} else {
+		return bytes.Compare(h[i].key, h[j].key) <= 0
+	}
 }
 func (h ItemHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
@@ -49,7 +56,7 @@ func (db *DB) NewIterator(options IteratorOptions) *Iterator {
 	var iters ItemHeap
 	//更新迭代器
 	indexIters := make(map[string]index.Iterator, db.options.indexNum)
-
+	maxHeap = options.Reverse
 	for name, index := range db.index {
 		indexIter := index.Iterator(options.Reverse)
 		indexIter.Rewind() //将每个迭代器进行初始化
@@ -62,6 +69,7 @@ func (db *DB) NewIterator(options IteratorOptions) *Iterator {
 			iters = append(iters, item) //把数据添加到最小堆中,先添加几个元素到最小堆里面
 		}
 	}
+
 	//初始化该小堆
 	heap.Init(&iters)
 
@@ -85,8 +93,10 @@ func (it *Iterator) Rewind() {
 
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (it *Iterator) Seek(key []byte) {
+
 	for _, indexIter := range it.indexIters {
 		indexIter.Seek(key) //每个元素都往后走一个位置，并且把这个元素添加进去,并且把比他小的全部
+		//既要有效，同时前缀还要相同才能放到最小堆里面
 		if indexIter.Valid() {
 			item := &Node{
 				key:  indexIter.Key(),
@@ -98,6 +108,7 @@ func (it *Iterator) Seek(key []byte) {
 		//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
 		//it.skipToNext()
 	}
+	//找到的话，就要把前面的删除掉
 	//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
 	it.skipToNext()
 }
@@ -121,7 +132,7 @@ func (it *Iterator) Next() {
 		}
 
 		//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
-		//it.skipToNext()
+		it.skipToNext()
 	}
 }
 
@@ -138,7 +149,6 @@ func (it *Iterator) Key() []byte {
 //Value 当前遍历位置的value数据
 func (it *Iterator) Value() []byte {
 	node := it.iters[0] //获得堆顶的节点
-
 	logRecordPos := node.iter.Value()
 	it.db.mu.RLock()
 	defer it.db.mu.RUnlock()

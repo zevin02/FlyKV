@@ -81,5 +81,8 @@ func TestAdaptiveRadixTree_Iterator(t *testing.T) {
 	}
 
 	iter.Seek([]byte("key-1"))
+	t.Log(string(iter.Key()))
+	iter.Seek([]byte("key-1"))
+	t.Log(string(iter.Key()))
 	assert.NotNil(t, iter.Key())
 }
