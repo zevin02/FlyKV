@@ -88,9 +88,24 @@ func TestBTree_Iterator(t *testing.T) {
 	}
 
 	//4.测试 seek
-	iter4 := bt1.Iterator(true)
+	iter4 := bt1.Iterator(false)
 	for iter4.Seek([]byte("bb")); iter4.Valid(); iter4.Next() {
 		assert.NotNil(t, iter4.Key())
 	}
-
+	//如果已经无效了，就不能再使用
+	iter4.Seek([]byte("bb"))
+	assert.False(t, iter4.Valid())
+	//
+	iter4.Rewind()
+	iter4.Seek([]byte("bb"))
+	key1 := iter4.Key()
+	t.Log(string(iter4.Key()))
+	iter4.Next()
+	iter4.Seek([]byte("bb"))
+	key2 := iter4.Key()
+	assert.NotEqual(t, key1, key2)
+	t.Log(string(iter4.Key()))
+	iter4.Next()
+	iter4.Seek([]byte("bb"))
+	t.Log(string(iter4.Key()))
 }

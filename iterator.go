@@ -1,14 +1,15 @@
 package FlexDB
 
 import (
+	"FlexDB/data"
 	"FlexDB/index"
 	"bytes"
 	"container/heap"
 )
 
-var maxHeap bool
+var maxHeap bool //用来判断用户的迭代器是希望正序还是倒序，由此创建小堆或者大堆
 
-//供用户使用的迭代器
+// Iterator 供用户使用的迭代器
 type Iterator struct {
 	options    IteratorOptions
 	db         *DB
@@ -16,10 +17,10 @@ type Iterator struct {
 	indexIters map[string]index.Iterator
 }
 
-//定义一个结构体，用来存储最小堆中的数据
+// Node 定义一个结构体，用来存储堆中的数据
 type Node struct {
 	key  []byte         //这个key的数据
-	iter index.Iterator //这个key所在的索引位置
+	iter index.Iterator //这个key所在的索引迭代器，当前迭代器中存储了这个索引中的所有元素
 }
 
 type ItemHeap []*Node
@@ -28,11 +29,13 @@ func (h ItemHeap) Len() int {
 	return len(h)
 }
 
+// Less 根据用户指定的reverse与否来决定是大堆还是小堆
 func (h ItemHeap) Less(i, j int) bool {
 	if maxHeap {
+		//大堆
 		return bytes.Compare(h[i].key, h[j].key) >= 0
-
 	} else {
+		//小堆
 		return bytes.Compare(h[i].key, h[j].key) <= 0
 	}
 }
@@ -51,63 +54,98 @@ func (h *ItemHeap) Pop() interface{} {
 	return item
 }
 
-//初始化迭代器
+// NewIterator 初始化迭代器
 func (db *DB) NewIterator(options IteratorOptions) *Iterator {
-	var iters ItemHeap
 	//更新迭代器
 	indexIters := make(map[string]index.Iterator, db.options.indexNum)
 	maxHeap = options.Reverse
 	for name, index := range db.index {
-		indexIter := index.Iterator(options.Reverse)
-		indexIter.Rewind() //将每个迭代器进行初始化
-		if indexIter.Valid() {
-			item := &Node{
-				key:  indexIter.Key(),
-				iter: indexIter,
-			}
-			indexIters[name] = indexIter
-			iters = append(iters, item) //把数据添加到最小堆中,先添加几个元素到最小堆里面
-		}
+		indexIter := index.Iterator(options.Reverse) //获得索引的迭代器
+		indexIter.Rewind()                           //将每个迭代器进行初始化
+		indexIters[name] = indexIter
 	}
 
-	//初始化该小堆
-	heap.Init(&iters)
-
-	return &Iterator{
+	resiter := &Iterator{
 		db:         db,
-		iters:      iters,
 		options:    options,
 		indexIters: indexIters,
 	}
+	resiter.Rewind()
+	heap.Init(&resiter.iters)
+
+	return resiter
+
 }
 
-//Rewind 重新回到迭代器的起点，即第一个位置
+//Rewind 重新回到迭代器的起点，即第一个位置,清空迭代器中的元素，并且添加一些元素进去
 func (it *Iterator) Rewind() {
-	//将每个迭代器都进行初始化，设置成首个元素
-	for _, indexIter := range it.indexIters {
-		indexIter.Rewind()
+	//先清空堆里面的元素
+	for it.Valid() {
+		heap.Pop(&it.iters)
 	}
+	//将每个迭代器都进行初始化，设置成首个元素,并且添加每个迭代器的首元素进入到堆中
+	for _, indexIter := range it.indexIters {
+		indexIter.Rewind() //将每个索引迭代器都回到起点位置
+		//添加节点到堆中
+		it.addNode(indexIter)
+	}
+	//将堆里面的数据清空
 	//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
 	it.skipToNext()
 }
 
+//addNode  向heap中添加数据
+func (it *Iterator) addNode(indexIter index.Iterator) {
+	if indexIter.Valid() {
+		item := &Node{
+			key:  indexIter.Key(),
+			iter: indexIter,
+		}
+		heap.Push(&it.iters, item)
+	}
+}
+
+//adjustHeapBeforeSeek 在seek执行前删除干扰的元素
+func (it *Iterator) adjustHeapBeforeSeek(key []byte) {
+	for it.Valid() {
+		if it.options.Reverse {
+			//如果是从大到小，那么
+			if bytes.Compare(it.Key(), key) >= 0 {
+				//可以删除堆里面的元素了
+				heap.Pop(&it.iters)
+			} else {
+				break
+			}
+		} else {
+			//如果是从小到大，那么堆顶的，比key小的都可以删除
+			if bytes.Compare(it.Key(), key) <= 0 {
+				//可以删除堆里面的元素了
+				heap.Pop(&it.iters)
+			} else {
+				break
+			}
+		}
+	}
+}
+
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (it *Iterator) Seek(key []byte) {
+	//需要将堆里面不符合小于key的都先删除掉
+	it.adjustHeapBeforeSeek(key)
 
 	for _, indexIter := range it.indexIters {
-		indexIter.Seek(key) //每个元素都往后走一个位置，并且把这个元素添加进去,并且把比他小的全部
-		//既要有效，同时前缀还要相同才能放到最小堆里面
+		var valueBefore *data.LogRecordPos
 		if indexIter.Valid() {
-			item := &Node{
-				key:  indexIter.Key(),
-				iter: indexIter,
-			}
-			it.iters = append(it.iters, item) //把数据添加到最小堆中,先添加几个元素到最小堆里面
+			valueBefore = indexIter.Value()
 		}
+		indexIter.Seek(key) //每个元素都往后走一个位置，并且把这个元素添加进去,并且把比他小的全部
 
-		//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
-		//it.skipToNext()
+		if indexIter.Valid() && valueBefore != indexIter.Value() {
+			//seek之前和seek之后的坐标不同才能插入这个元素
+			it.addNode(indexIter)
+		}
 	}
+
 	//找到的话，就要把前面的删除掉
 	//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
 	it.skipToNext()
@@ -116,24 +154,15 @@ func (it *Iterator) Seek(key []byte) {
 //Next 跳转到下一个key
 func (it *Iterator) Next() {
 	//当前没有元素的话，直接
-	if len(it.indexIters) == 0 {
+	if !it.Valid() {
 		return
 	}
-	heap.Pop(&it.iters) //把里面的元素删除掉
-	//再新增加元素进去
-	for _, indexIter := range it.indexIters {
-		indexIter.Next() //每个元素都往后走一个位置，并且把这个元素添加进去
-		if indexIter.Valid() {
-			item := &Node{
-				key:  indexIter.Key(),
-				iter: indexIter,
-			}
-			it.iters = append(it.iters, item) //把数据添加到最小堆中,先添加几个元素到最小堆里面
-		}
+	node := heap.Pop(&it.iters).(*Node) //把里面的元素删除掉
+	node.iter.Next()
+	it.addNode(node.iter)
 
-		//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
-		it.skipToNext()
-	}
+	//	//如果有指定前缀，就需要直接跳转到指定位置，否则就没有操作
+	it.skipToNext()
 }
 
 //Valid 是否有效，即时有已经遍历完了所有的Key，用来退出遍历
@@ -164,21 +193,22 @@ func (it *Iterator) Close() {
 	for _, indexIter := range it.indexIters {
 		indexIter.Close()
 	}
+
 }
 
-//用于如果指定prefix的话，需要找到指定前缀的key
+//skipToNext 用于如果指定prefix的话，需要找到指定前缀的key
 func (it *Iterator) skipToNext() {
 	prefixLen := len(it.options.Prefix)
 	if prefixLen == 0 {
 		return
 	}
 	for len(it.iters) > 0 {
-		item := it.iters[0] //获得堆顶部的元素
-		key := item.key
+		key := it.Key()
 		if prefixLen <= len(key) && bytes.Compare(it.options.Prefix, key[:prefixLen]) == 0 {
 			//前缀符合要求就可以跳出查找了
 			break
 		}
+		//前缀相同才可以
 		it.Next()
 	}
 }
