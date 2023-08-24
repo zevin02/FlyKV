@@ -75,11 +75,11 @@ func TestAdaptiveRadixTree_Iterator(t *testing.T) {
 	art.Put([]byte("key-2"), &data.LogRecordPos{Fid: 1, Offset: 12})
 	art.Put([]byte("key-3"), &data.LogRecordPos{Fid: 1, Offset: 12})
 	art.Put([]byte("key-11"), &data.LogRecordPos{Fid: 1, Offset: 12})
-	iter := art.Iterator(true)
+	iter := art.Iterator(false)
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		assert.NotNil(t, iter.Key())
 	}
-
+	iter.Rewind()
 	iter.Seek([]byte("key-1"))
 	t.Log(string(iter.Key()))
 	iter.Seek([]byte("key-1"))

@@ -67,6 +67,7 @@ func TestBTree_Iterator(t *testing.T) {
 	//1.BTree为空的情况
 	iter1 := bt1.Iterator(false)
 	assert.Equal(t, false, iter1.Valid())
+	iter1.Close()
 
 	//2.BTree有数据的情况
 	bt1.Put([]byte("abcd"), &data.LogRecordPos{Fid: 1, Offset: 10})
@@ -76,6 +77,7 @@ func TestBTree_Iterator(t *testing.T) {
 	assert.NotNil(t, iter2.Value())
 	iter2.Next()
 	assert.Equal(t, false, iter2.Valid())
+	iter2.Close()
 
 	//3.BTree有多条数据的情况
 	bt1.Put([]byte("cccd"), &data.LogRecordPos{Fid: 1, Offset: 10})
@@ -86,6 +88,7 @@ func TestBTree_Iterator(t *testing.T) {
 	for iter3.Rewind(); iter3.Valid(); iter3.Next() {
 		assert.NotNil(t, iter3.Key())
 	}
+	iter3.Close() //新开一个的话，前面的就要关掉
 
 	//4.测试 seek
 	iter4 := bt1.Iterator(false)
@@ -106,6 +109,7 @@ func TestBTree_Iterator(t *testing.T) {
 	assert.NotEqual(t, key1, key2)
 	t.Log(string(iter4.Key()))
 	iter4.Next()
+	//TODO 如果是按大到小遍历的，使用seek会超出界限，需要修复bug,所有的索引都需要
 	iter4.Seek([]byte("bb"))
 	t.Log(string(iter4.Key()))
 }

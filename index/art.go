@@ -120,15 +120,18 @@ func (ai *artIterator) Rewind() {
 
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (ai *artIterator) Seek(key []byte) {
-	if ai.reverse {
-		ai.currIndex = sort.Search(len(ai.value), func(i int) bool {
-			return bytes.Compare(ai.value[i].key, key) <= 0
-		})
-	} else {
-		//指定比较的规则
-		ai.currIndex = sort.Search(len(ai.value), func(i int) bool {
-			return bytes.Compare(ai.value[i].key, key) >= 0
-		})
+	start := ai.currIndex
+	if ai.Valid() {
+		if ai.reverse {
+			ai.currIndex = start + sort.Search(len(ai.value)-start, func(i int) bool {
+				return bytes.Compare(ai.value[i].key, key) <= 0
+			})
+		} else {
+			//指定比较的规则
+			ai.currIndex = start + sort.Search(len(ai.value)-start, func(i int) bool {
+				return bytes.Compare(ai.value[i].key, key) >= 0
+			})
+		}
 	}
 }
 

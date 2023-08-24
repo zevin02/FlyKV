@@ -27,7 +27,7 @@ func (bt *BTree) Size() int {
 	return bt.tree.Len()
 }
 
-//给BTRee实现这些接口，主要是调用BTree的一些功能和相关的方法
+//Put 给BTRee实现这些接口，主要是调用BTree的一些功能和相关的方法
 func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	it := &Item{key: key, pos: pos} //构造数据进行插入，获得指针
 	bt.lock.Lock()
@@ -115,13 +115,11 @@ func (bti *btreeIterator) Rewind() {
 
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (bti *btreeIterator) Seek(key []byte) {
-
 	start := bti.currIndex
 	if bti.Valid() {
-
 		if bti.reverse {
 			bti.currIndex = start + sort.Search(len(bti.value)-start, func(i int) bool {
-				return bytes.Compare(bti.value[i+start].key, key) <= 0
+				return bytes.Compare(bti.value[i+start].key, key) > 0
 			})
 		} else {
 			//指定比较的规则
@@ -130,7 +128,6 @@ func (bti *btreeIterator) Seek(key []byte) {
 			})
 		}
 	}
-
 }
 
 //Next 跳转到下一个key

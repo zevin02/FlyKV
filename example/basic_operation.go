@@ -25,7 +25,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = db.Delete([]byte("name"))
+	_, err = db.Delete([]byte("name"))
 	if err != nil {
 		panic(err)
 	}

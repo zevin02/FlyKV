@@ -135,12 +135,15 @@ func (it *Iterator) Seek(key []byte) {
 
 	for _, indexIter := range it.indexIters {
 		var valueBefore *data.LogRecordPos
-		if indexIter.Valid() {
-			valueBefore = indexIter.Value()
+		if !indexIter.Valid() {
+			//如果之前不合理就直接跳过
+			continue
 		}
+		//到这里的值，之前的一定都跳过
+		valueBefore = indexIter.Value()
 		indexIter.Seek(key) //每个元素都往后走一个位置，并且把这个元素添加进去,并且把比他小的全部
-
-		if indexIter.Valid() && valueBefore != indexIter.Value() {
+		//在indexiter合理的情况之下fid不同可以直接加入，如果fid相同，那么offset不同也可以加入
+		if indexIter.Valid() && (valueBefore.Fid != indexIter.Value().Fid || valueBefore.Offset != indexIter.Value().Offset) {
 			//seek之前和seek之后的坐标不同才能插入这个元素
 			it.addNode(indexIter)
 		}
@@ -158,6 +161,7 @@ func (it *Iterator) Next() {
 		return
 	}
 	node := heap.Pop(&it.iters).(*Node) //把里面的元素删除掉
+	//b+树的这个有问题，插入了相同位置
 	node.iter.Next()
 	it.addNode(node.iter)
 

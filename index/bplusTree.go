@@ -2,6 +2,7 @@ package index
 
 import (
 	"FlexDB/data"
+	"bytes"
 	"go.etcd.io/bbolt"
 	"path/filepath"
 )
@@ -150,7 +151,11 @@ func (bpi *bptreeIterator) Rewind() {
 
 //Seek 根据传入的Key查找到第一个大于等于的目标key，根据从这个key开始遍历
 func (bpi *bptreeIterator) Seek(key []byte) {
-	bpi.currKey, bpi.currVal = bpi.cursor.Seek(key)
+	for bpi.Valid() && bytes.Compare(bpi.currKey, key) <= 0 {
+		bpi.Next()
+	}
+	//bpi.currKey, bpi.currVal = bpi.cursor.Seek(key)
+
 }
 
 //Next 跳转到下一个key

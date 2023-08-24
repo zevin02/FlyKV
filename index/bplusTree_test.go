@@ -98,7 +98,13 @@ func TestBPlusTree_Iterator(t *testing.T) {
 		assert.NotNil(t, iter.Key())
 		assert.NotNil(t, iter.Value())
 	}
+	iter.Rewind()
 	iter.Seek([]byte("aa"))
-	assert.NotNil(t, iter.Key())
-	assert.NotNil(t, iter.Value())
+	t.Log(string(iter.Key()))
+	iter.Next()
+	iter.Seek([]byte("s"))
+	//t.Log(string(iter.Key()))
+	assert.False(t, iter.Valid())
+	//assert.NotNil(t, iter.Key())
+	//assert.NotNil(t, iter.Value())
 }

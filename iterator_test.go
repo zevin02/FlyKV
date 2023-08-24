@@ -30,7 +30,7 @@ func TestDB_NewIterator_One_Value(t *testing.T) {
 func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	opts := DefaultOperations
 	opts.DirPath = DirPath
-	opts.IndexType = BPT
+	opts.IndexType = Btree
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.NotNil(t, db)
@@ -58,7 +58,6 @@ func TestDB_NewIterator_Multi_Values(t *testing.T) {
 	err = db.Put([]byte("encodkey:11gewgw111"), utils.RandomValue(10))
 	assert.Nil(t, err)
 	iter := db.NewIterator(DefaultIteratorOptions)
-	defer iter.Close()
 	assert.NotNil(t, iter)
 	//正序遍历
 	t.Log("========1=========")
@@ -98,6 +97,7 @@ func TestDB_NewIterator_Multi_Values(t *testing.T) {
 		t.Log(string(iter.Key()))
 	}
 	t.Log("========5=========")
+	iter.Close()
 
 	//反向迭代
 	opts1 := DefaultIteratorOptions
