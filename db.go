@@ -384,6 +384,8 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
 		}
+		//持久化之后，修改成MMap方式,无法进行修改，加快文件的读取
+		db.setIoManger(fio.MMapFio)
 		//设置进旧的文件集合中
 		db.olderFile[db.activeFile.FileId] = db.activeFile
 		//再打开一个新的活跃文件
@@ -620,6 +622,7 @@ func (db *DB) loadSeqNo() error {
 	return os.Remove(fileName)
 }
 
+//setIoManger 设置文件IO的方法
 func (db *DB) setIoManger(managerType fio.IOManagerType) error {
 	if db.activeFile == nil {
 		return nil
@@ -627,11 +630,7 @@ func (db *DB) setIoManger(managerType fio.IOManagerType) error {
 	if err := db.activeFile.SetIOManager(db.options.DirPath, managerType); err != nil {
 		return err
 	}
-	//for _, datafile := range db.olderFile {
-	//	if err := datafile.SetIOManager(db.options.DirPath, managerType); err != nil {
-	//		return err
-	//	}
-	//}
+
 	return nil
 }
 

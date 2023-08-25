@@ -4,30 +4,33 @@ import (
 	"FlexDB/data"
 	"FlexDB/fio"
 	"github.com/stretchr/testify/assert"
+	"path/filepath"
 	"testing"
 )
 
 //打开文件
 func TestOpenDataFile(t *testing.T) {
 	//打开一个数据活跃文件
-	df1, err := data.OpenDataFile("/tmp", 0, fio.StanderFIO)
+	df1, err := data.OpenDataFile("/tmp", 1111, fio.StanderFIO)
+	defer destroyFile(filepath.Join(data.GetDataFileName("/tmp", 1111)))
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
-
 	df2, err := data.OpenDataFile("/tmp", 1, fio.StanderFIO)
+	defer destroyFile(filepath.Join(data.GetDataFileName("/tmp", 1)))
 	assert.Nil(t, err)
 	assert.NotNil(t, df2)
 	//重复的打开同一个文件
-	df3, err := data.OpenDataFile("/tmp", 1, fio.StanderFIO)
+	df3, err := data.OpenDataFile("/tmp", 1111, fio.StanderFIO)
+	defer destroyFile(filepath.Join(data.GetDataFileName("/tmp", 1111)))
 	assert.Nil(t, err)
 	assert.NotNil(t, df3)
 
 }
 
 func TestDataFile_Write(t *testing.T) {
-
 	//打开文件
-	df1, err := data.OpenDataFile("/tmp", 0, fio.StanderFIO)
+	df1, err := data.OpenDataFile("/tmp", 1111, fio.StanderFIO)
+	defer destroyFile(filepath.Join(data.GetDataFileName("/tmp", 1111)))
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 	//写入数据
@@ -40,7 +43,8 @@ func TestDataFile_Write(t *testing.T) {
 }
 
 func TestDataFile_Close(t *testing.T) {
-	df1, err := data.OpenDataFile("/tmp", 12, fio.StanderFIO)
+	df1, err := data.OpenDataFile("/tmp", 1111, fio.StanderFIO)
+	defer destroyFile(filepath.Join(data.GetDataFileName("/tmp", 1111)))
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 
@@ -63,6 +67,7 @@ func TestDataFile_Sync(t *testing.T) {
 
 func TestDataFile_ReadLogRecord(t *testing.T) {
 	df1, err := data.OpenDataFile("/tmp", 1111, fio.StanderFIO)
+	defer destroyFile(filepath.Join(data.GetDataFileName("/tmp", 1111)))
 	assert.Nil(t, err)
 	assert.NotNil(t, df1)
 	//只有一条logrecord
@@ -92,7 +97,7 @@ func TestDataFile_ReadLogRecord(t *testing.T) {
 	err = df1.Write(encBuf)
 	assert.Nil(t, err)
 
-	readRec, readSize, err = df1.ReadLogRecord(17)
+	readRec, readSize, err = df1.ReadLogRecord(21)
 	assert.Nil(t, err)
 	assert.Equal(t, logRecord, readRec)
 	assert.Equal(t, size, readSize)
@@ -108,7 +113,7 @@ func TestDataFile_ReadLogRecord(t *testing.T) {
 	err = df1.Write(encBuf)
 	assert.Nil(t, err)
 
-	readRec, readSize, err = df1.ReadLogRecord(39)
+	readRec, readSize, err = df1.ReadLogRecord(47)
 	assert.Nil(t, err)
 	assert.Equal(t, logRecord, readRec)
 	assert.Equal(t, size, readSize)
