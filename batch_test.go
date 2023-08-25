@@ -88,7 +88,7 @@ func TestDB_WriteBatch3(t *testing.T) {
 	assert.NotNil(t, db)
 	assert.Nil(t, err)
 
-	_ = db.ListKeys()
+	_ = db.ListKeys(DefaultIteratorOptions)
 	wbOpts := DefaultWriteBatchOption
 	wbOpts.MaxWriteNum = 10000000
 	wb := db.NewWriteBatch(wbOpts)

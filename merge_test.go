@@ -45,7 +45,7 @@ func TestDB_Merge2(t *testing.T) {
 	defer func() {
 		_ = db2.Close()
 	}()
-	keys := db2.ListKeys()
+	keys := db2.ListKeys(DefaultIteratorOptions)
 	assert.Equal(t, 50000, len(keys))
 	for i := 0; i < 50000; i++ {
 		val, err := db2.Get(utils.GetTestKey(i))
@@ -90,7 +90,7 @@ func TestDB_Merge3(t *testing.T) {
 	defer func() {
 		_ = db2.Close()
 	}()
-	keys := db2.ListKeys()
+	keys := db2.ListKeys(DefaultIteratorOptions)
 	//Merge的时候删除了数据
 	assert.Equal(t, 40000, len(keys))
 	for i := 0; i < 10000; i++ {
@@ -133,7 +133,7 @@ func TestDB_Merge4(t *testing.T) {
 	defer func() {
 		_ = db2.Close()
 	}()
-	keys := db2.ListKeys()
+	keys := db2.ListKeys(DefaultIteratorOptions)
 	//Merge的时候删除了数据
 	assert.Equal(t, 0, len(keys))
 
@@ -178,7 +178,7 @@ func TestDB_Merge5(t *testing.T) {
 		_ = db2.Close()
 	}()
 	assert.Nil(t, err)
-	keys := db2.ListKeys()
+	keys := db2.ListKeys(DefaultIteratorOptions)
 	assert.Equal(t, 10000, len(keys))
 	for i := 60000; i < 70000; i++ {
 		val, err := db2.Get(utils.GetTestKey(i))
@@ -206,7 +206,7 @@ func TestDB_Merge6(t *testing.T) {
 	}
 	err = db.Merge(true)
 	assert.Nil(t, err)
-	keys := db.ListKeys()
+	keys := db.ListKeys(DefaultIteratorOptions)
 	//Merge的时候删除了数据
 	assert.Equal(t, 0, len(keys))
 
@@ -239,7 +239,7 @@ func TestDB_Merge7(t *testing.T) {
 	err = db.Merge(true)
 	assert.Nil(t, err)
 
-	keys := db.ListKeys()
+	keys := db.ListKeys(DefaultIteratorOptions)
 	//Merge的时候删除了数据
 	assert.Equal(t, 40000, len(keys))
 	for i := 0; i < 10000; i++ {
@@ -271,7 +271,7 @@ func TestDB_Merge8(t *testing.T) {
 	assert.Nil(t, err)
 	err = db.Put(utils.GetTestKey(1), utils.RandomValue(1024))
 	assert.Nil(t, err)
-	keys := db.ListKeys()
+	keys := db.ListKeys(DefaultIteratorOptions)
 	assert.Equal(t, 50000, len(keys))
 	for i := 0; i < 50000; i++ {
 		val, err := db.Get(utils.GetTestKey(i))

@@ -496,13 +496,13 @@ func TestDB_ListKeys(t *testing.T) {
 	assert.NotNil(t, db)
 	assert.Nil(t, err)
 	//数据库为空的情况
-	keys := db.ListKeys()
+	keys := db.ListKeys(DefaultIteratorOptions)
 	assert.Equal(t, 0, len(keys))
 
 	//只有一条数据
 	err = db.Put(utils.GetTestKey(1), utils.RandomValue(20))
 	assert.Nil(t, err)
-	keys2 := db.ListKeys()
+	keys2 := db.ListKeys(DefaultIteratorOptions)
 	assert.Equal(t, 1, len(keys2))
 
 	//有多条数据的情况
@@ -512,7 +512,10 @@ func TestDB_ListKeys(t *testing.T) {
 	assert.Nil(t, err)
 	err = db.Put(utils.GetTestKey(1111), utils.RandomValue(20))
 	assert.Nil(t, err)
-	keys3 := db.ListKeys()
+	keys3 := db.ListKeys(DefaultIteratorOptions)
+	for _, key := range keys3 {
+		t.Log(string(key))
+	}
 	assert.Equal(t, 4, len(keys3))
 }
 
@@ -534,8 +537,10 @@ func TestDB_Fold(t *testing.T) {
 		//这里可以自定义对key和value进行操作
 		assert.NotNil(t, key)
 		assert.NotNil(t, value)
+		t.Log(string(key), string(value))
 		return true
-	})
+	}, DefaultIteratorOptions)
+
 	assert.Nil(t, err)
 
 }

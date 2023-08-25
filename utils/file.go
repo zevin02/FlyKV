@@ -37,8 +37,6 @@ func AvailableDiskSize() (uint64, error) {
 	return stat.Bavail * uint64(stat.Bsize), nil
 }
 
-//TODO 文件达到阈值的时候，可以把这个文件改成mmap的形式来读取加快速度
-
 // CopyDir 拷贝数据目录
 func CopyDir(src, dst string, exclude []string) error {
 	//目标不存在则创建

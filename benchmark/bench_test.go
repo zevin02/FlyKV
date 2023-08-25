@@ -9,11 +9,14 @@ import (
 	"time"
 )
 
+const DirPath = "/home/zevin/githubmanage/program/FlexDB/fortest"
+
 var db *FlexDB.DB
 
 func init() {
 	//初始化一个存储引擎对象
 	opt := FlexDB.DefaultOperations
+	opt.DirPath = DirPath
 	opt.IndexType = FlexDB.Btree
 	var err error
 	db, err = FlexDB.Open(opt)

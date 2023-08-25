@@ -5,6 +5,7 @@ import (
 	"FlexDB/fio"
 	"FlexDB/index"
 	"FlexDB/utils"
+	"encoding/binary"
 	"github.com/gofrs/flock"
 	"io"
 	"os"
@@ -26,10 +27,10 @@ type DB struct {
 	fileIds                []int   //文件ID，只能在加载索引的时候使用
 	options                Options //配置信息
 	mu                     *sync.RWMutex
-	activeFile             *data.DataFile            //当前活跃文件，可以用来写入,在loaddatafile的时候，活跃文件和老文件都会被初始化
+	activeFile             *data.DataFile            //当前活跃文件，可以用来写入,在加载数据文件的时候，活跃文件和老文件都会被初始化
 	olderFile              map[uint32]*data.DataFile //旧的数据文件，用来读取
-	hashRing               *consistent.Consistent    //一致性哈希环，用来
-	index                  map[string]index.Indexer  //数据的内存索引
+	hashRing               *consistent.Consistent    //一致性哈希环，用来保证数据负载均衡式的分配到各个索引中
+	index                  map[string]index.Indexer  //数据的内存索引,TODO 索引数据可以定期写入到磁盘中，保证故障回复,B+树本身就是写入到磁盘的，
 	seqNo                  uint64                    //事务序列号，全局递增
 	seqNoFileExists        bool                      //存储事务序列号的文件是否存在
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
@@ -159,6 +160,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 }
 
 //Get 根据Key读取数据
+//TODO 可以实现一个读缓存来存储一些数据，避免每次直接进行磁盘IO，可以考虑使用LRU（用到节点中里面的timestamp和内存索引的timestamp比较，看是否返回），同时也可以考虑使用布隆过滤器来过滤没找到的key，就不需要要取查找
 func (db *DB) Get(key []byte) ([]byte, error) {
 	//打开读锁
 	db.mu.RLock()
@@ -209,47 +211,35 @@ func (db *DB) getValueByPos(logRecordPos *data.LogRecordPos) ([]byte, error) {
 }
 
 //ListKeys 获取数据中所有的key
-func (db *DB) ListKeys() [][]byte {
-	keys := [][]byte{}
-	for i := 0; i < db.options.indexNum; i++ {
-		node := "index" + strconv.Itoa(i) //遍历所有索引
-		iter := db.index[node].Iterator(false)
-		//var idx int = 0
-		for iter.Rewind(); iter.Valid(); iter.Next() {
-			//keys[idx] = iter.Key()
-			keys = append(keys, iter.Key())
-			//idx++
-		}
+func (db *DB) ListKeys(options IteratorOptions) [][]byte {
+	var keys [][]byte
+	iterator := db.NewIterator(options)
+	defer iterator.Close()
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		keys = append(keys, iterator.Key())
 	}
 	return keys
 }
 
 //Fold 获取所有的数据，并执行用户指定的操作
-func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
+func (db *DB) Fold(fn func(key []byte, value []byte) bool, options IteratorOptions) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	for i := 0; i < db.options.indexNum; i++ {
-		node := "index" + strconv.Itoa(i)
-		iterator := db.index[node].Iterator(false)
-		//使用完需要将他关闭掉,避免读写阻塞住
-		defer iterator.Close()
-		for iterator.Rewind(); iterator.Valid(); iterator.Next() {
-			val, err := db.getValueByPos(iterator.Value())
-			if err != nil {
-				return err
-			}
-			//如果不满足用户需求就跳出循环
-			if !fn(iterator.Key(), val) {
-				break
-			}
-
+	iterator := db.NewIterator(options)
+	//使用完需要将他关闭掉,避免读写阻塞住
+	defer iterator.Close()
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		val := iterator.Value()
+		//如果不满足用户需求就跳出循环
+		if !fn(iterator.Key(), val) {
+			break
 		}
 	}
 	return nil
 
 }
 
-//根据key删除对应的数据,如果存在的话，返回true，否则返回失败
+//Delete 根据key删除对应的数据,如果存在的话，返回true，否则返回失败
 func (db *DB) Delete(key []byte) (bool, error) {
 	if len(key) == 0 {
 		return false, ErrKeyIsEmpty
@@ -352,6 +342,7 @@ func (db *DB) Stat() *Stat {
 
 }
 
+//BackUp 数据备份，直接将数据目录进行拷贝，就可以实现做备份了
 func (db *DB) BackUp(dir string) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -359,14 +350,14 @@ func (db *DB) BackUp(dir string) error {
 	return utils.CopyDir(db.options.DirPath, dir, []string{fileFlockName})
 }
 
-//加锁的写入
+//appendLogRecordWithLock 加锁的写入
 func (db *DB) appendLogRecordWithLock(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.appendLogRecord(logRecord)
 }
 
-//插入后会返回这个位置的索引信息
+//appendLogRecord 插入后会返回这个位置的索引信息
 //追加数据写入到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	//判断当前活跃活跃文件是否存在
@@ -400,6 +391,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	}
 
 	db.ByteWritten += size
+	//binary.LittleEndian.Uint32(encRecord[5:9])
 
 	//判断是否需要对数据进行安全的持久化操作
 	var needSync bool = db.options.SyncWrite
@@ -412,14 +404,15 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 			return nil, err
 		}
 	}
-	//返回位置信息
-	pos := &data.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff, Size: uint32(size)}
+
+	//返回位置信息,包含当前的位置信息
+	pos := &data.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff, Size: uint32(size), Tstamp: binary.LittleEndian.Uint32(encRecord[5:9])}
 
 	return pos, nil
 
 }
 
-//设置当前活跃文件
+//setActiveDataFile 设置当前活跃文件
 //在访问这个方法的时候必须要持有锁，并发可能会有很多操作
 func (db *DB) setActiveDataFile() error {
 	//设置初始的activeID
@@ -451,6 +444,7 @@ func checkOptions(options Options) error {
 	return nil
 }
 
+//loadDataFile 加载数据文件
 func (db *DB) loadDataFile() error {
 	//读目录读取出来，把该目录中的所有文件读取出来
 	dirEntries, err := os.ReadDir(db.options.DirPath)
@@ -501,7 +495,7 @@ func (db *DB) loadDataFile() error {
 	return nil
 }
 
-//从数据文件中读取数据构造索引
+//loadIndexFromDataFiles 从数据文件中读取数据构造索引
 func (db *DB) loadIndexFromDataFiles() error {
 	//没有文件，说明当前是一个空的数据库
 	if len(db.fileIds) == 0 {
@@ -602,6 +596,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 	return nil
 }
 
+//loadSeqNo 加载事务序列号文件,获得事务序列号
 func (db *DB) loadSeqNo() error {
 	fileName := filepath.Join(db.options.DirPath, data.SeqNoFileName)
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
