@@ -457,10 +457,13 @@ func (db *DB) loadDataFile() error {
 		if strings.HasSuffix(entry.Name(), data.DataFileSuffix) {
 			//对00001.data文件进行分割，拿到他的第一个部分00001
 
-			splitNames := strings.Split(entry.Name(), ".")
+			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(".data")], "0") //去掉前导0
+			// 转换为文件ID
+			if trimmedName == "" {
+				trimmedName = "0"
+			}
 			//获得文件ID
-			fileId, err := strconv.Atoi(splitNames[0])
-
+			fileId, err := strconv.Atoi(trimmedName) //获得文件ID
 			if err != nil {
 				return ErrDataDirCorrupted
 			}

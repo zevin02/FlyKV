@@ -21,5 +21,6 @@ func RandomValue(n int) []byte {
 	for i := range b {
 		b[i] = letters[randStr.Intn(len(letters))]
 	}
-	return []byte("Value-" + string(b))
+	//return []byte("Value-" + string(b))
+	return []byte(string(b))
 }
