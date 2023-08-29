@@ -124,7 +124,6 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	if wal.activeFile == nil {
 		//当前没有active文件，就需要新创建一个
 		segfile, err := wal.OpenSegment(wal.segmentID)
-
 		if err != nil {
 			return nil, nil
 		}
@@ -136,16 +135,10 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	if uint32(length) >= wal.option.SegmentSize {
 		return nil, ErrPayloadExceedSeg
 	}
-
-	if headerSize+wal.currBlcokOffset >= BlockSize {
-		//当前的block中连头部都添加不进去
-		//填充一些无用的数据
-		buf := make([]byte, BlockSize-wal.currBlcokOffset)
-		wal.activeFile.append(buf)
-		wal.BlockId++
-		byteAdd := BlockSize - wal.currBlcokOffset
-		wal.currSegOffset += byteAdd
-		wal.currBlcokOffset = 0
+	blockFullWarning := headerSize+wal.currBlcokOffset >= BlockSize //当前block无法容纳下一个heaeder
+	if blockFullWarning {
+		//填充占位字符
+		wal.writePadding()
 	}
 
 	pos := &ChunkPos{
@@ -153,25 +146,27 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 		blockID:     wal.BlockId,
 		chunkOffset: wal.currBlcokOffset,
 	}
-	if uint32(length)+headerSize+wal.currBlcokOffset <= BlockSize {
+	var blockWritable bool = uint32(length)+headerSize+wal.currBlcokOffset <= BlockSize //当前的block是否可以被写入
+	if blockWritable {
 		//如果当前数据长度+头部数据+当前block中的偏移量小于一个block大小，就可以直接放进去
 		//把数据编码，并写入
-		encBuf := encode(data, Full)
-		wal.activeFile.append(encBuf)
-		pos.chunkSize = uint32(len(encBuf))
-		//更新偏移量信息
-		wal.currBlcokOffset += uint32(len(encBuf))
-		wal.currSegOffset += uint32(len(encBuf))
+		chunkSize, err := wal.writeChunk(data, Full)
+		if err != nil {
+			return nil, err
+		}
+		pos.chunkSize = chunkSize
 		return pos, nil
 	}
 	//如果走到这，说明当前的block无法容纳下该data，说明就需要将当前的data分在多个block中间存储
-	var begin uint32 = 0 //两个指针指向要截取的数据的位置信息
-	var end = uint32(length)
-	times := 0 //循环了多少次，多进行一次循环就多7字节
-	for {
-		if begin == end {
-			break
-		}
+
+	var (
+		begin        uint32    = 0 //两个指针指向要截取的数据的位置信息,begin指向的是当前的data读取的起点
+		end          uint32    = uint32(length)
+		chunkType    ChunkType //当前chunk的类型
+		bytesToWrite uint32    //当前写入了多少字节的大小
+	)
+	//times := 0 //循环了多少次，多进行一次循环就多7字节
+	for begin < end {
 		if wal.currSegOffset+headerSize >= wal.option.SegmentSize {
 			//如果当前文件剩余的空间连头部数据都写不进去，就需要新开辟一个文件，因为数据最多不会超过一个文件的大小，所以这边检查一下文件大小
 			//将数据进行持久化到磁盘中
@@ -182,54 +177,57 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 			//设置进旧文件集合中
 			wal.olderFile[wal.segmentID] = wal.activeFile
 			//新打开一个segment文件
-
 			wal.segmentID += 1
-
 			segfile, err := wal.OpenSegment(wal.segmentID)
-
 			if err != nil {
 				return nil, nil
 			}
 			wal.activeFile = segfile
-
 			wal.currSegOffset = 0   //把当前segment文件的指针设置成0
 			wal.currBlcokOffset = 0 //把当前block偏移置为0
 		}
 		if begin == 0 {
-			//说明当前数据还没有被切割
-			//说明这个chunk就是First
-			byteadd := BlockSize - wal.currBlcokOffset - headerSize
-			encBuf := encode(data[begin:begin+byteadd], First)
-			wal.activeFile.append(encBuf)
-			begin += byteadd //更新begin指针的位置
-			wal.currBlcokOffset = 0
-			wal.BlockId++
-			wal.currSegOffset += uint32(len(encBuf))
-
+			// This is the first chunk
+			chunkType = First
+			bytesToWrite = BlockSize - wal.currBlcokOffset - headerSize
+		} else if end-begin+headerSize >= BlockSize {
+			// This is a middle chunk
+			chunkType = Middle
+			bytesToWrite = BlockSize - headerSize
 		} else {
-			if end-begin+headerSize >= BlockSize {
-				//剩余的还是超过了一个block大小
-				encBuf := encode(data[begin:begin+BlockSize-headerSize], Middle)
-				wal.activeFile.append(encBuf)
-				begin += (BlockSize - headerSize)
-				wal.BlockId++
-				wal.currBlcokOffset = 0
-				wal.currSegOffset += uint32(len(encBuf))
-
-			} else {
-				//剩余的小于一个block大小，
-				encBuf := encode(data[begin:end], Last)
-				wal.activeFile.append(encBuf)
-				begin = end
-				wal.currBlcokOffset += uint32(len(encBuf))
-				wal.currSegOffset += uint32(len(encBuf))
-			}
+			// This is the last chunk
+			chunkType = Last
+			bytesToWrite = end - begin
 		}
-		times++
+		chunkSize, err := wal.writeChunk(data[begin:begin+bytesToWrite], chunkType)
+		if err != nil {
+			return nil, err
+		}
+		pos.chunkSize += chunkSize
+		begin += bytesToWrite
 	}
-	pos.chunkSize = uint32(length + times*headerSize)
-
 	return pos, nil
+}
+
+// WriteChunk 写入一个chunk数据
+//返回chunk的大小
+func (wal *Wal) writeChunk(data []byte, chunkType ChunkType) (uint32, error) {
+	encBuf := encode(data, chunkType)
+	wal.activeFile.append(encBuf)
+	wal.BlockId = wal.BlockId + (wal.currBlcokOffset+uint32(len(encBuf)))/BlockSize
+	wal.currBlcokOffset = (wal.currBlcokOffset + uint32(len(encBuf))) % BlockSize
+	wal.currSegOffset = wal.currSegOffset + uint32(len(encBuf))
+	return uint32(len(encBuf)), nil
+}
+
+//writePadding Block已经不够写了，写一个占位的字符
+func (wal *Wal) writePadding() {
+	buf := make([]byte, BlockSize-wal.currBlcokOffset)
+	wal.activeFile.append(buf)
+	wal.BlockId++
+	byteAdd := BlockSize - wal.currBlcokOffset
+	wal.currSegOffset += byteAdd
+	wal.currBlcokOffset = 0
 }
 
 //Read 根据Pos位置来读取数据

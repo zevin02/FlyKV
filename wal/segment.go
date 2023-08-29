@@ -70,8 +70,8 @@ func GetSegmentFile(dirPath string, fileId uint32) string {
 }
 
 //append
-func (seg *Segment) append(buf []byte) {
-	seg.fd.Write(buf)
+func (seg *Segment) append(buf []byte) (int, error) {
+	return seg.fd.Write(buf)
 }
 
 func (seg *Segment) Size() (uint32, error) {
