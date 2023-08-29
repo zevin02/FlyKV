@@ -1,7 +1,10 @@
 package wal
 
 import (
+	"encoding/binary"
 	"fmt"
+	lru "github.com/hashicorp/golang-lru/v2"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 )
@@ -37,19 +40,25 @@ const (
 
 //Segment 某一个具体的segment文件的信息
 type Segment struct {
-	fd *os.File //文件描述符句柄
+	fd        *os.File                   //文件描述符句柄
+	SegmentId uint32                     //标识当前的segmentId是多少
+	blockId   uint32                     //标识但前的blockId是从哪里开始的
+	cache     *lru.Cache[uint32, []byte] //读取缓存数据
 }
 
 //OpenSegment 打开一个新的segment文件
-func OpenSegment(dirPath string, id uint32) (*Segment, error) {
+func (wal *Wal) OpenSegment(segmentId uint32) (*Segment, error) {
 	//打开一个文件
 	fd, err := os.OpenFile(
-		GetSegmentFile(dirPath, id),
+		GetSegmentFile(wal.option.dirPath, segmentId),
 		os.O_CREATE|os.O_RDWR|os.O_APPEND,
 		SegFilePerm,
 	)
 	seg := &Segment{
-		fd: fd,
+		fd:        fd,
+		SegmentId: segmentId,
+		blockId:   segmentId * SegmentMaxBlockNum,
+		cache:     wal.cache,
 	}
 	return seg, err
 }
@@ -71,4 +80,84 @@ func (seg *Segment) Size() (uint32, error) {
 		return 0, err
 	}
 	return uint32(stat.Size()), nil
+}
+
+//如果返回true，说明数据在当前的segment可以全部读取成功，否则就需要在开启第二个segment文件继续把数据读取完
+func (seg *Segment) ReadBlock(blockId uint32, chunkOffset uint32) (bool, uint32, []byte, error) {
+	//由于一个semnet文件可以装segmentblocksize个block块
+	//获得需要读取的blockID在当前的block块中是第几个block
+	filesize, err := seg.Size()
+	if err != nil {
+		return false, 0, nil, err
+	}
+	curSegBlockId := blockId - seg.blockId //计算需要查找的blockId在当前是第几个block
+	var (
+		i        uint32 = 0
+		res      []byte //用来返回的数据
+		ok              = false
+		begin           = chunkOffset
+		readByte uint32 = BlockSize //需要读取多少个字节
+	)
+
+	for {
+
+		//(curSegBlockId+i)*BlockSize=当前的segment文件中的某个block在segment文件中的偏移位置
+		if curSegBlockId*BlockSize+begin+BlockSize > filesize {
+			readByte = filesize - curSegBlockId*BlockSize
+		}
+		if readByte == 0 {
+			//说明当前已经没有数据可以读取了，需要在下一个segment文件中继续读取数据
+			break
+		}
+		var buf []byte
+		//如果用户有定义cache进行缓存,直接从cache中读取数据
+		buf, cacheok := seg.cache.Get(GetCacheKey(seg.SegmentId, curSegBlockId+seg.SegmentId*SegmentMaxBlockNum))
+		if !cacheok || uint32(len(buf)) < BlockSize {
+			//缓存没有命中或者缓存中读取的数据小于一个block大小，也需要重新进行读取
+			buf, err = seg.readNByte(readByte, BlockSize*curSegBlockId)
+			if err != nil {
+				return false, 0, nil, err
+			}
+			seg.cache.Add(GetCacheKey(seg.SegmentId, curSegBlockId+seg.SegmentId*SegmentMaxBlockNum), buf) //将读取到的block数据添加到LRU中
+		}
+
+		//buf now is a blocksize buf
+		header := buf[begin : begin+headerSize] //提取出来头部信息
+		blockType := header[6]
+		length := binary.LittleEndian.Uint16(header[4:])
+		crc := binary.LittleEndian.Uint32(header[:4]) //获得crc数据
+		calCrc := crc32.ChecksumIEEE(header[4:])
+		dataBegin := begin + headerSize
+		dataEnd := begin + headerSize + uint32(length)
+		data := buf[dataBegin:dataEnd] //数据的数据
+		calCrc = crc32.Update(calCrc, crc32.IEEETable, data)
+		if calCrc != crc {
+			return false, 0, nil, ErrInvalidCrc
+		}
+		res = append(res, data...) //将data数据追加到res中
+		if blockType == Full || blockType == Last {
+			ok = true
+			break
+		} else {
+			//说明他是middle或者first，那么当前数据读取完之后，还需要继续读取下一个block块
+			begin = 0
+		}
+		i++
+		curSegBlockId++
+	}
+	return ok, i, res, nil
+}
+
+func (seg *Segment) readNByte(n uint32, offset uint32) (b []byte, err error) {
+	b = make([]byte, n)
+	_, err = seg.fd.ReadAt(b, int64(offset))
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func GetCacheKey(segmentID uint32, blockID uint32) uint32 {
+	key := (segmentID & 0xFFFF) | ((blockID & 0xFFFF) << 16)
+	return key
 }

@@ -2,6 +2,7 @@ package wal
 
 import (
 	"encoding/binary"
+	"github.com/hashicorp/golang-lru/v2"
 	"hash/crc32"
 	"os"
 	"sort"
@@ -11,15 +12,15 @@ import (
 )
 
 type Wal struct {
-	currBlcokOffset uint32              //当前指向的block中的偏移大小
-	currSegOffset   uint32              //当前segment文件中的偏移量
-	segmentID       uint32              //当前指向的文件ID
-	BlockId         uint32              //当前处理到的blockId
-	activeFile      *Segment            //当前指向的活跃的segment文件
-	olderFile       map[uint32]*Segment //当前文件已经达到阈值之后就开辟一个新的文件来进行处理
-	mu              *sync.RWMutex       //当前Wal持有的读写锁
-	option          Option              //当前的wal的配置项
-	//cache           *lru.Cache          //缓存block数据,key是blockId，value是一个block大小的缓存
+	currBlcokOffset uint32                     //当前指向的block中的偏移大小
+	currSegOffset   uint32                     //当前segment文件中的偏移量
+	segmentID       uint32                     //当前指向的文件ID
+	BlockId         uint32                     //当前处理到的blockId
+	activeFile      *Segment                   //当前指向的活跃的segment文件
+	olderFile       map[uint32]*Segment        //当前文件已经达到阈值之后就开辟一个新的文件来进行处理
+	mu              *sync.RWMutex              //当前Wal持有的读写锁
+	option          Option                     //当前的wal的配置项
+	cache           *lru.Cache[uint32, []byte] //缓存block数据,key是blockId，value是一个block大小的缓存
 }
 
 type Option struct {
@@ -27,7 +28,7 @@ type Option struct {
 	BlockSize          uint32 //一个block固定是32KB
 	SegmentMaxBlockNum uint32 //一个segment文件中最多可以存放多少个Block
 	SegmentSize        uint32 //一个segment文件最大可以最大的大小
-
+	BlockCacheNum      int    //lru中可以缓存多少个Block节点
 }
 
 var defaultOpt = Option{
@@ -35,6 +36,7 @@ var defaultOpt = Option{
 	BlockSize:          20,
 	SegmentMaxBlockNum: 3,
 	SegmentSize:        BlockSize * SegmentMaxBlockNum,
+	BlockCacheNum:      20,
 }
 
 //Open 打开一个Wal实例
@@ -50,6 +52,13 @@ func Open(options Option) (*Wal, error) {
 		mu:        new(sync.RWMutex),
 		olderFile: make(map[uint32]*Segment),
 		option:    options,
+	}
+	if options.BlockCacheNum > 0 {
+		cache, err := lru.New[uint32, []byte](options.BlockCacheNum)
+		if err != nil {
+			return nil, err
+		}
+		wal.cache = cache
 	}
 	//读取当前目录下的所有.seg文件
 	dirEntries, err := os.ReadDir(options.dirPath)
@@ -80,7 +89,7 @@ func Open(options Option) (*Wal, error) {
 	//遍历每个文件ID，打开对应的文件
 	var i int = 0
 	for i, fid := range fileIds {
-		segFile, err := OpenSegment(options.dirPath, uint32(fid))
+		segFile, err := wal.OpenSegment(uint32(fid))
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +123,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	defer wal.mu.Unlock()
 	if wal.activeFile == nil {
 		//当前没有active文件，就需要新创建一个
-		segfile, err := OpenSegment(wal.option.dirPath, wal.segmentID)
+		segfile, err := wal.OpenSegment(wal.segmentID)
 
 		if err != nil {
 			return nil, nil
@@ -131,10 +140,10 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	if headerSize+wal.currBlcokOffset >= BlockSize {
 		//当前的block中连头部都添加不进去
 		//填充一些无用的数据
-		buf := make([]byte, BlockSize-wal.currSegOffset)
+		buf := make([]byte, BlockSize-wal.currBlcokOffset)
 		wal.activeFile.append(buf)
 		wal.BlockId++
-		byteAdd := BlockSize - wal.currSegOffset
+		byteAdd := BlockSize - wal.currBlcokOffset
 		wal.currSegOffset += byteAdd
 		wal.currBlcokOffset = 0
 	}
@@ -176,7 +185,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 
 			wal.segmentID += 1
 
-			segfile, err := OpenSegment(wal.option.dirPath, wal.segmentID)
+			segfile, err := wal.OpenSegment(wal.segmentID)
 
 			if err != nil {
 				return nil, nil
@@ -224,8 +233,44 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 }
 
 //Read 根据Pos位置来读取数据
-func (wal *Wal) Read(pos ChunkPos) ([]byte, error) {
-	return nil, nil
+func (wal *Wal) Read(pos *ChunkPos) ([]byte, error) {
+	if pos.segmentID > wal.segmentID || pos.blockID > wal.BlockId {
+		return nil, ErrPosNotValid
+	}
+	var segFile *Segment
+	if pos.segmentID == wal.segmentID {
+		//说明当前数据是在active中中
+		segFile = wal.activeFile
+	} else {
+		//数据在old文件中
+		segFile = wal.olderFile[pos.segmentID]
+	}
+	var ret []byte
+	for {
+		ok, readBlockNum, res, err := segFile.ReadBlock(pos.blockID, pos.chunkOffset)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, res...)
+		if ok {
+			//当前的segment文件完全可以将全部数据读取上来
+			break
+		} else {
+			//当前的数据无法在一个segment文件中全部读取上来,需要新开一个文件
+			if pos.segmentID+1 == wal.segmentID {
+				//说明当前数据是在active中中
+				segFile = wal.activeFile
+			} else {
+				//数据在old文件中
+				segFile = wal.olderFile[pos.segmentID+1]
+			}
+
+			pos.blockID += readBlockNum //更新需要读取到哪个block中
+			pos.chunkOffset = 0
+		}
+	}
+
+	return ret, nil
 }
 
 //Sync 将当前的活跃文件进行持久化
@@ -244,7 +289,7 @@ func encode(data []byte, chunkType ChunkType) []byte {
 	binary.LittleEndian.PutUint16(encBuf[4:], uint16(len(data))) //写入对应的data大小
 	copy(encBuf[7:], data)
 	//计算校验值
-	crc := crc32.ChecksumIEEE(encBuf[:4])
+	crc := crc32.ChecksumIEEE(encBuf[4:])
 	binary.LittleEndian.PutUint32(encBuf[:4], uint32(crc))
 	return encBuf
 }
