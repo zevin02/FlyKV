@@ -82,15 +82,15 @@ func (seg *Segment) Size() (uint32, error) {
 	return uint32(stat.Size()), nil
 }
 
-//如果返回true，说明数据在当前的segment可以全部读取成功，否则就需要在开启第二个segment文件继续把数据读取完
-func (seg *Segment) ReadBlock(blockId uint32, chunkOffset uint32) (bool, uint32, []byte, error) {
+//ReadInternal 如果返回true，说明数据在当前的segment可以全部读取成功，否则就需要在开启第二个segment文件继续把数据读取完
+func (seg *Segment) ReadInternal(blockId, chunkOffset uint32) (isComplete bool, numBlockRead uint32, data []byte, err error) {
 	//由于一个semnet文件可以装segmentblocksize个block块
 	//获得需要读取的blockID在当前的block块中是第几个block
 	filesize, err := seg.Size()
 	if err != nil {
 		return false, 0, nil, err
 	}
-	curSegBlockId := blockId - seg.blockId //计算需要查找的blockId在当前是第几个block
+	curSegBlockId := blockId - seg.blockId //计算需要查找的blockId在当前的segment文件中是第几个block
 	var (
 		i        uint32 = 0
 		res      []byte //用来返回的数据
@@ -100,7 +100,6 @@ func (seg *Segment) ReadBlock(blockId uint32, chunkOffset uint32) (bool, uint32,
 	)
 
 	for {
-
 		//(curSegBlockId+i)*BlockSize=当前的segment文件中的某个block在segment文件中的偏移位置
 		if curSegBlockId*BlockSize+begin+BlockSize > filesize {
 			readByte = filesize - curSegBlockId*BlockSize
@@ -109,30 +108,15 @@ func (seg *Segment) ReadBlock(blockId uint32, chunkOffset uint32) (bool, uint32,
 			//说明当前已经没有数据可以读取了，需要在下一个segment文件中继续读取数据
 			break
 		}
-		var buf []byte
-		//如果用户有定义cache进行缓存,直接从cache中读取数据
-		buf, cacheok := seg.cache.Get(GetCacheKey(seg.SegmentId, curSegBlockId+seg.SegmentId*SegmentMaxBlockNum))
-		if !cacheok || uint32(len(buf)) < BlockSize {
-			//缓存没有命中或者缓存中读取的数据小于一个block大小，也需要重新进行读取
-			buf, err = seg.readNByte(readByte, BlockSize*curSegBlockId)
-			if err != nil {
-				return false, 0, nil, err
-			}
-			seg.cache.Add(GetCacheKey(seg.SegmentId, curSegBlockId+seg.SegmentId*SegmentMaxBlockNum), buf) //将读取到的block数据添加到LRU中
+
+		blockBuf, err := seg.readBlock(curSegBlockId, readByte)
+		if err != nil {
+			return false, 0, nil, err
 		}
 
-		//buf now is a blocksize buf
-		header := buf[begin : begin+headerSize] //提取出来头部信息
-		blockType := header[6]
-		length := binary.LittleEndian.Uint16(header[4:])
-		crc := binary.LittleEndian.Uint32(header[:4]) //获得crc数据
-		calCrc := crc32.ChecksumIEEE(header[4:])
-		dataBegin := begin + headerSize
-		dataEnd := begin + headerSize + uint32(length)
-		data := buf[dataBegin:dataEnd] //数据的数据
-		calCrc = crc32.Update(calCrc, crc32.IEEETable, data)
-		if calCrc != crc {
-			return false, 0, nil, ErrInvalidCrc
+		blockType, data, err := seg.readChunk(blockBuf, begin)
+		if err != nil {
+			return false, 0, nil, err
 		}
 		res = append(res, data...) //将data数据追加到res中
 		if blockType == Full || blockType == Last {
@@ -146,6 +130,45 @@ func (seg *Segment) ReadBlock(blockId uint32, chunkOffset uint32) (bool, uint32,
 		curSegBlockId++
 	}
 	return ok, i, res, nil
+}
+
+//readBlock 读取一个block大小的数据
+func (seg *Segment) readBlock(curSegBlockId, readByte uint32) ([]byte, error) {
+	var (
+		buf     []byte
+		err     error
+		ok      bool
+		blockId = curSegBlockId + seg.SegmentId*SegmentMaxBlockNum
+	)
+
+	buf, ok = seg.cache.Get(GetCacheKey(seg.SegmentId, blockId)) //从LRU缓存中读取数据
+	if !ok || uint32(len(buf)) < BlockSize {
+		//缓存没有命中或者缓存中读取的数据小于一个block大小，也需要重新进行读取
+		buf, err = seg.readNByte(readByte, BlockSize*curSegBlockId)
+		if err != nil {
+			return nil, err
+		}
+		seg.cache.Add(GetCacheKey(seg.SegmentId, blockId), buf) //将读取到的block数据添加到LRU中
+	}
+	return buf, nil
+}
+
+//readChunk 根据给定的chunkoffset从block中读取chunk数据
+func (seg *Segment) readChunk(blockBuf []byte, begin uint32) (ChunkType, []byte, error) {
+	//buf now is a blocksize buf
+	header := blockBuf[begin : begin+headerSize] //提取出来头部信息
+	blockType := header[6]
+	length := binary.LittleEndian.Uint16(header[4:])
+	crc := binary.LittleEndian.Uint32(header[:4]) //获得crc数据
+	calCrc := crc32.ChecksumIEEE(header[4:])
+	dataBegin := begin + headerSize
+	dataEnd := begin + headerSize + uint32(length)
+	data := blockBuf[dataBegin:dataEnd] //数据的数据
+	calCrc = crc32.Update(calCrc, crc32.IEEETable, data)
+	if calCrc != crc {
+		return 0, nil, ErrInvalidCrc
+	}
+	return blockType, data, nil
 }
 
 func (seg *Segment) readNByte(n uint32, offset uint32) (b []byte, err error) {

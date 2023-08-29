@@ -158,10 +158,10 @@ func TestWal_Read1(t *testing.T) {
 
 	////padding+first+middle+last
 	val = utils.RandomValue(27)
-	pos, err = wal.Write(val)
-	assert.NotNil(t, pos)
+	pos2, err := wal.Write(val)
+	assert.NotNil(t, pos2)
 	assert.Nil(t, err)
-	res, err = wal.Read(pos)
+	res, err = wal.Read(pos2) //read中不能对外面的pos进行修改
 	assert.Nil(t, err)
 	assert.Equal(t, val, res)
 
@@ -170,12 +170,12 @@ func TestWal_Read1(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, val1, res)
 	//
-	//assert.Equal(t, uint32(4), pos.blockID)
-	//assert.Equal(t, uint32(48), pos.chunkSize)
-	//assert.Equal(t, uint32(0), pos.chunkOffset)
-	//assert.Equal(t, uint32(1), pos.segmentID)
-	//assert.Equal(t, uint32(8), wal.currSegOffset)
-	//assert.Equal(t, uint32(8), wal.currBlcokOffset)
-	//assert.Equal(t, uint32(6), wal.BlockId)
-	//assert.Equal(t, uint32(2), wal.segmentID)
+	assert.Equal(t, uint32(4), pos2.blockID)
+	assert.Equal(t, uint32(48), pos2.chunkSize)
+	assert.Equal(t, uint32(0), pos2.chunkOffset)
+	assert.Equal(t, uint32(1), pos2.segmentID)
+	assert.Equal(t, uint32(8), wal.currSegOffset)
+	assert.Equal(t, uint32(8), wal.currBlcokOffset)
+	assert.Equal(t, uint32(6), wal.BlockId)
+	assert.Equal(t, uint32(2), wal.segmentID)
 }

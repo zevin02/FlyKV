@@ -245,14 +245,19 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, error) {
 		//数据在old文件中
 		segFile = wal.olderFile[pos.segmentID]
 	}
-	var ret []byte
+	var (
+		ret         []byte
+		blockId     = pos.blockID
+		chunkOffset = pos.chunkOffset
+	)
+
 	for {
-		ok, readBlockNum, res, err := segFile.ReadBlock(pos.blockID, pos.chunkOffset)
+		isComplete, numBlockRead, data, err := segFile.ReadInternal(blockId, chunkOffset)
 		if err != nil {
 			return nil, err
 		}
-		ret = append(ret, res...)
-		if ok {
+		ret = append(ret, data...)
+		if isComplete {
 			//当前的segment文件完全可以将全部数据读取上来
 			break
 		} else {
@@ -265,8 +270,8 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, error) {
 				segFile = wal.olderFile[pos.segmentID+1]
 			}
 
-			pos.blockID += readBlockNum //更新需要读取到哪个block中
-			pos.chunkOffset = 0
+			blockId += numBlockRead //更新需要读取到哪个block中
+			chunkOffset = 0
 		}
 	}
 
