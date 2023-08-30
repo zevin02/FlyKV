@@ -15,12 +15,12 @@ func destroyFile(name string) {
 
 //测试full ,fist+last
 func TestWal_Write1(t *testing.T) {
-	opts := defaultOpt
+	opts := DefaultWalOpt
 	opts.BlockSize = 20
-	opts.SegmentSize = 3
-	opts.SegmentSize = opts.BlockSize * opts.SegmentSize
+	opts.SegmentMaxBlockNum = 3
+	opts.SegmentSize = opts.BlockSize * opts.SegmentMaxBlockNum
 	wal, err := Open(opts)
-	defer destroyFile(opts.dirPath)
+	defer destroyFile(opts.DirPath)
 	assert.Nil(t, err)
 	assert.NotNil(t, wal)
 	//测试full
@@ -43,12 +43,12 @@ func TestWal_Write1(t *testing.T) {
 
 //测试full+padding +full+first+midlle+last
 func TestWal_Write2(t *testing.T) {
-	opts := defaultOpt
+	opts := DefaultWalOpt
 	opts.BlockSize = 20
-	opts.SegmentSize = 3
-	opts.SegmentSize = opts.BlockSize * opts.SegmentSize
+	opts.SegmentMaxBlockNum = 3
+	opts.SegmentSize = opts.BlockSize * opts.SegmentMaxBlockNum
 	wal, err := Open(opts)
-	defer destroyFile(opts.dirPath)
+	defer destroyFile(opts.DirPath)
 	assert.Nil(t, err)
 	assert.NotNil(t, wal)
 	//测试full
@@ -74,12 +74,12 @@ func TestWal_Write2(t *testing.T) {
 
 //测试full+full+full+padding+first+last+paddding+first+middle+last
 func TestWal_Write3(t *testing.T) {
-	opts := defaultOpt
+	opts := DefaultWalOpt
 	opts.BlockSize = 20
-	opts.SegmentSize = 3
-	opts.SegmentSize = opts.BlockSize * opts.SegmentSize
+	opts.SegmentMaxBlockNum = 3
+	opts.SegmentSize = opts.BlockSize * opts.SegmentMaxBlockNum
 	wal, err := Open(opts)
-	defer destroyFile(opts.dirPath)
+	defer destroyFile(opts.DirPath)
 	assert.Nil(t, err)
 	assert.NotNil(t, wal)
 	//测试full
@@ -111,12 +111,12 @@ func TestWal_Write3(t *testing.T) {
 }
 
 func TestWal_Read1(t *testing.T) {
-	opts := defaultOpt
+	opts := DefaultWalOpt
 	opts.BlockSize = 20
-	opts.SegmentSize = 3
-	opts.SegmentSize = opts.BlockSize * opts.SegmentSize
+	opts.SegmentMaxBlockNum = 3
+	opts.SegmentSize = opts.BlockSize * opts.SegmentMaxBlockNum
 	wal, err := Open(opts)
-	defer destroyFile(opts.dirPath)
+	defer destroyFile(opts.DirPath)
 	assert.Nil(t, err)
 	assert.NotNil(t, wal)
 	//测试full
@@ -241,7 +241,7 @@ func TestWal_Read1(t *testing.T) {
 	assert.NotNil(t, wal2)
 	//遍历获得所有的位置信息
 
-	chunkPosArr, err := wal2.GetAllChunkPos()
+	_, chunkPosArr, err := wal2.GetAllChunkInfo()
 	assert.Equal(t, 6, len(chunkPosArr))
 	assert.Nil(t, err)
 }

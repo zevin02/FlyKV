@@ -23,32 +23,33 @@ type Wal struct {
 	mu              *sync.RWMutex              //当前Wal持有的读写锁
 	option          WalOption                  //当前的wal的配置项
 	cache           *lru.Cache[uint32, []byte] //缓存block数据,key是blockId，value是一个block大小的缓存
+	isEmpty         bool                       //是否为空文件,如果当前为空文件，就不能进行读取操作
 }
 
 type WalOption struct {
-	dirPath            string //所在的路经名
+	DirPath            string //所在的路经名
 	BlockSize          uint32 //一个block固定是32KB
 	SegmentMaxBlockNum uint32 //一个segment文件中最多可以存放多少个Block
 	SegmentSize        uint32 //一个segment文件最大可以最大的大小
 	BlockCacheNum      int    //lru中可以缓存多少个Block节点
-	fileSuffix         string //文件的后缀名
+	FileSuffix         string //文件的后缀名
 }
 
-var defaultOpt = WalOption{
-	dirPath:            "/home/zevin/tmp",
-	BlockSize:          20,
-	SegmentMaxBlockNum: 3,
-	SegmentSize:        BlockSize * SegmentMaxBlockNum,
+var DefaultWalOpt = WalOption{
+	DirPath:            "/home/zevin/tmp",
+	BlockSize:          32 * 1024,
+	SegmentMaxBlockNum: 1024,
+	SegmentSize:        32 * 1024 * 1024,
 	BlockCacheNum:      20,
-	fileSuffix:         ".seg",
+	FileSuffix:         ".seg",
 }
 
 //Open 打开一个Wal实例
 func Open(options WalOption) (*Wal, error) {
 	//检查当前目录是否存在，如果不存在的话就需要创建
-	if _, err := os.Stat(options.dirPath); os.IsNotExist(err) {
+	if _, err := os.Stat(options.DirPath); os.IsNotExist(err) {
 		//创建目录
-		if err := os.MkdirAll(options.dirPath, os.ModePerm); err != nil {
+		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
 			return nil, err
 		}
 	}
@@ -56,6 +57,7 @@ func Open(options WalOption) (*Wal, error) {
 		mu:        new(sync.RWMutex),
 		olderFile: make(map[uint32]*Segment),
 		option:    options,
+		isEmpty:   true,
 	}
 	//设置LRU缓存
 	if err := wal.setCache(); err != nil {
@@ -72,7 +74,7 @@ func Open(options WalOption) (*Wal, error) {
 		return nil, err
 	}
 	//更新wal中的数据
-	blockID := uint32(segNum) * SegmentMaxBlockNum
+	blockID := uint32(segNum) * wal.option.SegmentMaxBlockNum
 	if wal.activeFile != nil {
 		activeSize, err := wal.activeFile.Size()
 		if err != nil {
@@ -80,10 +82,11 @@ func Open(options WalOption) (*Wal, error) {
 		}
 		wal.currSegOffset = activeSize
 		//blockIdInCurrSeg:=activeSize/BlockSize
-		wal.currBlcokOffset = activeSize % BlockSize
+		wal.currBlcokOffset = activeSize % wal.option.BlockSize
 
-		blockID = blockID + activeSize/BlockSize //这个问题
+		blockID = blockID + activeSize/wal.option.BlockSize //这个问题
 		wal.BlockId = blockID
+		wal.isEmpty = false
 	}
 
 	return wal, nil
@@ -104,17 +107,17 @@ func (wal *Wal) setCache() error {
 //loadFiles 加载数据文件
 func (wal *Wal) loadFiles() ([]int, error) {
 	//读取当前目录下的所有.seg文件
-	dirEntries, err := os.ReadDir(wal.option.dirPath)
+	dirEntries, err := os.ReadDir(wal.option.DirPath)
 	if err != nil {
 		return nil, err
 	}
 	var fileIds []int
 	//遍历目录中的所有文件,找到所有以.data结尾的文件
 	for _, entry := range dirEntries {
-		if strings.HasSuffix(entry.Name(), wal.option.fileSuffix) {
+		if strings.HasSuffix(entry.Name(), wal.option.FileSuffix) {
 			//对00001.data文件进行分割，拿到他的第一个部分00001
 
-			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(wal.option.fileSuffix)], "0") //去掉前导0
+			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(wal.option.FileSuffix)], "0") //去掉前导0
 			// 转换为文件ID
 			if trimmedName == "" {
 				trimmedName = "0"
@@ -137,7 +140,7 @@ func (wal *Wal) openFiles(fileIds []int) (int, error) {
 	//遍历每个文件ID，打开对应的文件
 	var segNum int = 0
 	for i, fid := range fileIds {
-		segFile, err := wal.OpenSegment(uint32(fid), fio.MMapFio)
+		segFile, err := wal.OpenSegment(uint32(fid), wal.option, fio.MMapFio)
 		if err != nil {
 			return 0, err
 		}
@@ -145,7 +148,7 @@ func (wal *Wal) openFiles(fileIds []int) (int, error) {
 			//说明这个是最后一个id，就设置成活跃文件
 			wal.activeFile = segFile
 			wal.segmentID = uint32(fid)
-			wal.activeFile.SetIOManager(wal.option.dirPath, wal.option.fileSuffix, fio.StanderFIO) //设置成标准IO
+			wal.activeFile.SetIOManager(wal.option.DirPath, wal.option.FileSuffix, fio.StanderFIO) //设置成标准IO
 		} else {
 			//否则就放入到旧文件集合中
 			wal.olderFile[uint32(fid)] = segFile
@@ -180,7 +183,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	defer wal.mu.Unlock()
 	if wal.activeFile == nil {
 		//当前没有active文件，就需要新创建一个
-		segfile, err := wal.OpenSegment(wal.segmentID, fio.StanderFIO)
+		segfile, err := wal.OpenSegment(wal.segmentID, wal.option, fio.StanderFIO)
 		if err != nil {
 			return nil, nil
 		}
@@ -192,7 +195,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	if uint32(length) >= wal.option.SegmentSize {
 		return nil, ErrPayloadExceedSeg
 	}
-	blockFullWarning := headerSize+wal.currBlcokOffset >= BlockSize //当前block无法容纳下一个heaeder
+	blockFullWarning := headerSize+wal.currBlcokOffset >= wal.option.BlockSize //当前block无法容纳下一个heaeder
 	if blockFullWarning {
 		//填充占位字符
 		wal.writePadding()
@@ -203,7 +206,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 		blockID:     wal.BlockId,
 		chunkOffset: wal.currBlcokOffset,
 	}
-	var blockWritable bool = uint32(length)+headerSize+wal.currBlcokOffset <= BlockSize //当前的block是否可以被写入
+	var blockWritable bool = uint32(length)+headerSize+wal.currBlcokOffset <= wal.option.BlockSize //当前的block是否可以被写入
 	if blockWritable {
 		//如果当前数据长度+头部数据+当前block中的偏移量小于一个block大小，就可以直接放进去
 		//把数据编码，并写入
@@ -212,6 +215,8 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 			return nil, err
 		}
 		pos.chunkSize = chunkSize
+		wal.isEmpty = false
+
 		return pos, nil
 	}
 	//如果走到这，说明当前的block无法容纳下该data，说明就需要将当前的data分在多个block中间存储
@@ -234,10 +239,10 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 			//设置进旧文件集合中
 			wal.olderFile[wal.segmentID] = wal.activeFile
 			//新打开一个segment文件
-			wal.activeFile.SetIOManager(wal.option.dirPath, wal.option.fileSuffix, fio.MMapFio) //该文件达到阈值了，就设置成MMapIO
+			wal.activeFile.SetIOManager(wal.option.DirPath, wal.option.FileSuffix, fio.MMapFio) //该文件达到阈值了，就设置成MMapIO
 
 			wal.segmentID += 1
-			segfile, err := wal.OpenSegment(wal.segmentID, fio.StanderFIO)
+			segfile, err := wal.OpenSegment(wal.segmentID, wal.option, fio.StanderFIO)
 			if err != nil {
 				return nil, nil
 			}
@@ -248,11 +253,11 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 		if begin == 0 {
 			// This is the first chunk
 			chunkType = First
-			bytesToWrite = BlockSize - wal.currBlcokOffset - headerSize
-		} else if end-begin+headerSize >= BlockSize {
+			bytesToWrite = wal.option.BlockSize - wal.currBlcokOffset - headerSize
+		} else if end-begin+headerSize >= wal.option.BlockSize {
 			// This is a middle chunk
 			chunkType = Middle
-			bytesToWrite = BlockSize - headerSize
+			bytesToWrite = wal.option.BlockSize - headerSize
 		} else {
 			// This is the last chunk
 			chunkType = Last
@@ -265,6 +270,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 		pos.chunkSize += chunkSize
 		begin += bytesToWrite
 	}
+	wal.isEmpty = false
 	return pos, nil
 }
 
@@ -273,18 +279,18 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 func (wal *Wal) writeChunk(data []byte, chunkType ChunkType) (uint32, error) {
 	encBuf := encode(data, chunkType)
 	wal.activeFile.append(encBuf)
-	wal.BlockId = wal.BlockId + (wal.currBlcokOffset+uint32(len(encBuf)))/BlockSize
-	wal.currBlcokOffset = (wal.currBlcokOffset + uint32(len(encBuf))) % BlockSize
+	wal.BlockId = wal.BlockId + (wal.currBlcokOffset+uint32(len(encBuf)))/wal.option.BlockSize
+	wal.currBlcokOffset = (wal.currBlcokOffset + uint32(len(encBuf))) % wal.option.BlockSize
 	wal.currSegOffset = wal.currSegOffset + uint32(len(encBuf))
 	return uint32(len(encBuf)), nil
 }
 
 //writePadding Block已经不够写了，写一个占位的字符
 func (wal *Wal) writePadding() {
-	buf := make([]byte, BlockSize-wal.currBlcokOffset)
+	buf := make([]byte, wal.option.BlockSize-wal.currBlcokOffset)
 	wal.activeFile.append(buf)
 	wal.BlockId++
-	byteAdd := BlockSize - wal.currBlcokOffset
+	byteAdd := wal.option.BlockSize - wal.currBlcokOffset
 	wal.currSegOffset += byteAdd
 	wal.currBlcokOffset = 0
 }
@@ -294,6 +300,10 @@ func (wal *Wal) writePadding() {
 func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
+	if wal.isEmpty {
+		//如果为空，就不能读取，返回一个消息
+		return nil, nil, ErrEmpty
+	}
 	if pos.segmentID > wal.segmentID || pos.blockID > wal.BlockId {
 		return nil, nil, ErrPosNotValid
 	}
@@ -391,27 +401,34 @@ func encode(data []byte, chunkType ChunkType) []byte {
 }
 
 //GetAllChunkPos 获得所有的chunkPos的信息
-func (wal *Wal) GetAllChunkPos() ([]*ChunkPos, error) {
+func (wal *Wal) GetAllChunkInfo() ([][]byte, []*ChunkPos, error) {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
+	//如果当前为空Wal，也不允许进行读操作
+	if wal.isEmpty {
+		return nil, nil, ErrEmpty
+	}
 	var chunkPosArray []*ChunkPos
 	var chunkPos = &ChunkPos{
 		segmentID:   0,
 		blockID:     0,
 		chunkOffset: 0,
 	}
+	var res [][]byte
 	for {
-		_, nextchunkPos, err := wal.Read(chunkPos)
+		data, nextchunkPos, err := wal.Read(chunkPos)
 		if err != nil {
 			//文件读取完了
 			if err == io.EOF || err == ErrPosNotValid {
 				break
 			} else {
-				return nil, err
+				return nil, nil, err
 			}
 		}
+		res = append(res, data)
+
 		chunkPosArray = append(chunkPosArray, chunkPos)
 		chunkPos = nextchunkPos //更新下一次要开始的chunk的位置
 	}
-	return chunkPosArray, nil
+	return res, chunkPosArray, nil
 }

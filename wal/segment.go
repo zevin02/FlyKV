@@ -31,11 +31,9 @@ type ChunkPos struct {
 //4       +       2       +    1     +     n
 //header的长度是4+2+1=7字节的大小
 const (
-	headerSize                = 7      //header的固定大小
-	BlockSize          uint32 = 20     //一个block固定是32KB
-	SegmentMaxBlockNum uint32 = 3      //一个segment文件中最多可以存放多少个Block
-	SegFileSuffix      string = ".seg" //所有seg文件都是".seg“后缀
-	SegFilePerm               = 0644
+	headerSize = 7 //header的固定大小
+	//BlockSize          uint32 = 20 //一个block固定是32KB
+	SegmentMaxBlockNum uint32 = 3 //一个segment文件中最多可以存放多少个Block
 )
 
 //Segment 某一个具体的segment文件的信息
@@ -45,22 +43,25 @@ type Segment struct {
 	SegmentId uint32                     //标识当前的segmentId是多少
 	blockId   uint32                     //标识但前的blockId是从哪里开始的
 	cache     *lru.Cache[uint32, []byte] //读取缓存数据
+	opts      WalOption
 }
 
 //OpenSegment 打开一个新的segment文件
-func (wal *Wal) OpenSegment(segmentId uint32, ioType fio.IOManagerType) (*Segment, error) {
+func (wal *Wal) OpenSegment(segmentId uint32, opts WalOption, ioType fio.IOManagerType) (*Segment, error) {
 	//打开一个文件
 
-	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.dirPath, wal.option.fileSuffix, segmentId), ioType)
+	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.DirPath, wal.option.FileSuffix, segmentId), ioType)
 	if err != nil {
 		return nil, err
 	}
 	seg := &Segment{
 		IOManager: ioManager,
 		SegmentId: segmentId,
-		blockId:   segmentId * SegmentMaxBlockNum,
 		cache:     wal.cache,
+		opts:      opts,
 	}
+	seg.blockId = segmentId * opts.SegmentMaxBlockNum
+
 	return seg, err
 }
 
@@ -98,13 +99,13 @@ func (seg *Segment) ReadInternal(blockId, chunkOffset uint32) (isComplete bool, 
 		res      []byte //用来返回的数据
 		ok              = false
 		begin           = chunkOffset
-		readByte uint32 = BlockSize //需要读取多少个字节
+		readByte uint32 = seg.opts.BlockSize //需要读取多少个字节
 	)
 
 	for {
 		//(curSegBlockId+i)*BlockSize=当前的segment文件中的某个block在segment文件中的偏移位置
-		if curSegBlockId*BlockSize+begin+BlockSize > filesize {
-			readByte = filesize - curSegBlockId*BlockSize
+		if curSegBlockId*seg.opts.BlockSize+begin+seg.opts.BlockSize > filesize {
+			readByte = filesize - curSegBlockId*seg.opts.BlockSize
 		}
 		if readByte == 0 {
 			//说明当前已经没有数据可以读取了，需要在下一个segment文件中继续读取数据
@@ -140,13 +141,13 @@ func (seg *Segment) readBlock(curSegBlockId, readByte uint32) ([]byte, error) {
 		buf     []byte
 		err     error
 		ok      bool
-		blockId = curSegBlockId + seg.SegmentId*SegmentMaxBlockNum
+		blockId = curSegBlockId + seg.SegmentId*seg.opts.SegmentMaxBlockNum
 	)
 
 	buf, ok = seg.cache.Get(GetCacheKey(seg.SegmentId, blockId)) //从LRU缓存中读取数据
-	if !ok || uint32(len(buf)) < BlockSize {
+	if !ok || uint32(len(buf)) < seg.opts.BlockSize {
 		//缓存没有命中或者缓存中读取的数据小于一个block大小，也需要重新进行读取
-		buf, err = seg.readNByte(readByte, BlockSize*curSegBlockId)
+		buf, err = seg.readNByte(readByte, seg.opts.BlockSize*curSegBlockId)
 		if err != nil {
 			return nil, err
 		}
