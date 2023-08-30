@@ -1,9 +1,11 @@
 package wal
 
 import (
+	"FlexDB/fio"
 	"encoding/binary"
 	"github.com/hashicorp/golang-lru/v2"
 	"hash/crc32"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -89,7 +91,7 @@ func Open(options WalOption) (*Wal, error) {
 	//遍历每个文件ID，打开对应的文件
 	var segNum int = 0
 	for i, fid := range fileIds {
-		segFile, err := wal.OpenSegment(uint32(fid))
+		segFile, err := wal.OpenSegment(uint32(fid), fio.MMapFio)
 		if err != nil {
 			return nil, err
 		}
@@ -97,6 +99,7 @@ func Open(options WalOption) (*Wal, error) {
 			//说明这个是最后一个id，就设置成活跃文件
 			wal.activeFile = segFile
 			wal.segmentID = uint32(fid)
+			wal.activeFile.SetIOManager(wal.option.dirPath, fio.StanderFIO) //设置成标准IO
 		} else {
 			//否则就放入到旧文件集合中
 			wal.olderFile[uint32(fid)] = segFile
@@ -126,7 +129,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 	defer wal.mu.Unlock()
 	if wal.activeFile == nil {
 		//当前没有active文件，就需要新创建一个
-		segfile, err := wal.OpenSegment(wal.segmentID)
+		segfile, err := wal.OpenSegment(wal.segmentID, fio.StanderFIO)
 		if err != nil {
 			return nil, nil
 		}
@@ -180,8 +183,10 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 			//设置进旧文件集合中
 			wal.olderFile[wal.segmentID] = wal.activeFile
 			//新打开一个segment文件
+			wal.activeFile.SetIOManager(wal.option.dirPath, fio.MMapFio) //该文件达到阈值了，就设置成MMapIO
+
 			wal.segmentID += 1
-			segfile, err := wal.OpenSegment(wal.segmentID)
+			segfile, err := wal.OpenSegment(wal.segmentID, fio.StanderFIO)
 			if err != nil {
 				return nil, nil
 			}
@@ -341,4 +346,28 @@ func encode(data []byte, chunkType ChunkType) []byte {
 	crc := crc32.ChecksumIEEE(encBuf[4:])
 	binary.LittleEndian.PutUint32(encBuf[:4], uint32(crc))
 	return encBuf
+}
+
+//GetAllChunkPos 获得所有的chunkPos的信息
+func (wal *Wal) GetAllChunkPos() ([]*ChunkPos, error) {
+	var chunkPosArray []*ChunkPos
+	var chunkPos = &ChunkPos{
+		segmentID:   0,
+		blockID:     0,
+		chunkOffset: 0,
+	}
+	for {
+		_, nextchunkPos, err := wal.Read(chunkPos)
+		if err != nil {
+			//文件读取完了
+			if err == io.EOF || err == ErrPosNotValid {
+				break
+			} else {
+				return nil, err
+			}
+		}
+		chunkPosArray = append(chunkPosArray, chunkPos)
+		chunkPos = nextchunkPos //更新下一次要开始的chunk的位置
+	}
+	return chunkPosArray, nil
 }

@@ -48,14 +48,14 @@ type Segment struct {
 }
 
 //OpenSegment 打开一个新的segment文件
-func (wal *Wal) OpenSegment(segmentId uint32) (*Segment, error) {
+func (wal *Wal) OpenSegment(segmentId uint32, ioType fio.IOManagerType) (*Segment, error) {
 	//打开一个文件
 	//fd, err := os.OpenFile(
 	//	GetSegmentFile(wal.option.dirPath, segmentId),
 	//	os.O_CREATE|os.O_RDWR|os.O_APPEND,
 	//	SegFilePerm,
 	//)
-	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.dirPath, segmentId), fio.StanderFIO)
+	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.dirPath, segmentId), ioType)
 	if err != nil {
 		return nil, err
 	}
@@ -177,6 +177,7 @@ func (seg *Segment) readChunk(blockBuf []byte, begin uint32) (ChunkType, []byte,
 	return blockType, data, nil
 }
 
+//
 func (seg *Segment) readNByte(n, offset uint32) (b []byte, err error) {
 	b = make([]byte, n)
 	_, err = seg.IOManager.Read(b, int64(offset))
@@ -197,4 +198,16 @@ func (seg *Segment) Sync() error {
 
 func (seg *Segment) Close() error {
 	return seg.IOManager.Close()
+}
+
+func (seg *Segment) SetIOManager(dirPath string, ioType fio.IOManagerType) error {
+	if err := seg.IOManager.Close(); err != nil {
+		return err
+	}
+	IOmanager, err := fio.NewIOManager(GetSegmentFile(dirPath, seg.SegmentId), ioType)
+	if err != nil {
+		return err
+	}
+	seg.IOManager = IOmanager
+	return nil
 }

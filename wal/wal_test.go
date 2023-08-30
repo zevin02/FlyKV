@@ -171,13 +171,13 @@ func TestWal_Read1(t *testing.T) {
 	assert.Equal(t, uint32(1), nextChunkPos.segmentID)
 
 	////padding+first+middle+last
-	val = utils.RandomValue(27)
-	pos2, err := wal.Write(val)
+	val5 := utils.RandomValue(27)
+	pos2, err := wal.Write(val5)
 	assert.NotNil(t, pos2)
 	assert.Nil(t, err)
 	res, nextChunkPos, err = wal.Read(pos2) //read中不能对外面的pos进行修改
 	assert.Nil(t, err)
-	assert.Equal(t, val, res)
+	assert.Equal(t, val5, res)
 	assert.Equal(t, uint32(8), nextChunkPos.chunkOffset)
 	assert.Equal(t, uint32(6), nextChunkPos.blockID)
 	assert.Equal(t, uint32(2), nextChunkPos.segmentID)
@@ -224,4 +224,24 @@ func TestWal_Read1(t *testing.T) {
 	assert.Equal(t, uint32(19), wal1.currBlcokOffset)
 	assert.Equal(t, uint32(6), wal1.BlockId)
 	assert.Equal(t, uint32(2), wal1.segmentID)
+
+	//测试segment2号文件
+	res, nextChunkPos, err = wal1.Read(pos2) //read中不能对外面的pos进行修改
+	assert.Nil(t, err)
+	assert.Equal(t, val5, res)
+	assert.Equal(t, uint32(8), nextChunkPos.chunkOffset)
+	assert.Equal(t, uint32(6), nextChunkPos.blockID)
+	assert.Equal(t, uint32(2), nextChunkPos.segmentID)
+
+	assert.Nil(t, wal1.Close())
+
+	//var chunkPosArray []*ChunkPos
+	wal2, err := Open(opts)
+	assert.Nil(t, err)
+	assert.NotNil(t, wal2)
+	//遍历获得所有的位置信息
+
+	chunkPosArr, err := wal2.GetAllChunkPos()
+	assert.Equal(t, 6, len(chunkPosArr))
+	assert.Nil(t, err)
 }
