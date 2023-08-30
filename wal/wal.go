@@ -31,6 +31,7 @@ type WalOption struct {
 	SegmentMaxBlockNum uint32 //一个segment文件中最多可以存放多少个Block
 	SegmentSize        uint32 //一个segment文件最大可以最大的大小
 	BlockCacheNum      int    //lru中可以缓存多少个Block节点
+	fileSuffix         string //文件的后缀名
 }
 
 var defaultOpt = WalOption{
@@ -39,6 +40,7 @@ var defaultOpt = WalOption{
 	SegmentMaxBlockNum: 3,
 	SegmentSize:        BlockSize * SegmentMaxBlockNum,
 	BlockCacheNum:      20,
+	fileSuffix:         ".seg",
 }
 
 //Open 打开一个Wal实例
@@ -55,57 +57,21 @@ func Open(options WalOption) (*Wal, error) {
 		olderFile: make(map[uint32]*Segment),
 		option:    options,
 	}
-	if options.BlockCacheNum > 0 {
-		cache, err := lru.New[uint32, []byte](options.BlockCacheNum)
-		if err != nil {
-			return nil, err
-		}
-		wal.cache = cache
+	//设置LRU缓存
+	if err := wal.setCache(); err != nil {
+		return nil, err
 	}
-	//读取当前目录下的所有.seg文件
-	dirEntries, err := os.ReadDir(options.dirPath)
+	//加载当前目录的所有数据文件
+	fileIds, err := wal.loadFiles()
 	if err != nil {
 		return nil, err
 	}
-	var fileIds []int
-	//遍历目录中的所有文件,找到所有以.data结尾的文件
-	for _, entry := range dirEntries {
-		if strings.HasSuffix(entry.Name(), SegFileSuffix) {
-			//对00001.data文件进行分割，拿到他的第一个部分00001
-
-			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(SegFileSuffix)], "0") //去掉前导0
-			// 转换为文件ID
-			if trimmedName == "" {
-				trimmedName = "0"
-			}
-			//获得文件ID
-			fileId, err := strconv.Atoi(trimmedName) //获得文件ID
-			if err != nil {
-				return nil, err
-			}
-			fileIds = append(fileIds, fileId)
-		}
-	}
-	//对文件ID进行排序，从小到大
-	sort.Ints(fileIds)
 	//遍历每个文件ID，打开对应的文件
-	var segNum int = 0
-	for i, fid := range fileIds {
-		segFile, err := wal.OpenSegment(uint32(fid), fio.MMapFio)
-		if err != nil {
-			return nil, err
-		}
-		if i == len(fileIds)-1 {
-			//说明这个是最后一个id，就设置成活跃文件
-			wal.activeFile = segFile
-			wal.segmentID = uint32(fid)
-			wal.activeFile.SetIOManager(wal.option.dirPath, fio.StanderFIO) //设置成标准IO
-		} else {
-			//否则就放入到旧文件集合中
-			wal.olderFile[uint32(fid)] = segFile
-		}
-		segNum = i
+	segNum, err := wal.openFiles(fileIds)
+	if err != nil {
+		return nil, err
 	}
+	//更新wal中的数据
 	blockID := uint32(segNum) * SegmentMaxBlockNum
 	if wal.activeFile != nil {
 		activeSize, err := wal.activeFile.Size()
@@ -121,6 +87,91 @@ func Open(options WalOption) (*Wal, error) {
 	}
 
 	return wal, nil
+}
+
+//setCache 设置缓存
+func (wal *Wal) setCache() error {
+	if wal.option.BlockCacheNum > 0 {
+		cache, err := lru.New[uint32, []byte](wal.option.BlockCacheNum)
+		if err != nil {
+			return err
+		}
+		wal.cache = cache
+	}
+	return nil
+}
+
+//loadFiles 加载数据文件
+func (wal *Wal) loadFiles() ([]int, error) {
+	//读取当前目录下的所有.seg文件
+	dirEntries, err := os.ReadDir(wal.option.dirPath)
+	if err != nil {
+		return nil, err
+	}
+	var fileIds []int
+	//遍历目录中的所有文件,找到所有以.data结尾的文件
+	for _, entry := range dirEntries {
+		if strings.HasSuffix(entry.Name(), wal.option.fileSuffix) {
+			//对00001.data文件进行分割，拿到他的第一个部分00001
+
+			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(wal.option.fileSuffix)], "0") //去掉前导0
+			// 转换为文件ID
+			if trimmedName == "" {
+				trimmedName = "0"
+			}
+			//获得文件ID
+			fileId, err := strconv.Atoi(trimmedName) //获得文件ID
+			if err != nil {
+				return nil, err
+			}
+			fileIds = append(fileIds, fileId)
+		}
+	}
+	//对文件ID进行排序，从小到大
+	sort.Ints(fileIds)
+	return fileIds, nil
+}
+
+//openFiles 打开所有的segment文件
+func (wal *Wal) openFiles(fileIds []int) (int, error) {
+	//遍历每个文件ID，打开对应的文件
+	var segNum int = 0
+	for i, fid := range fileIds {
+		segFile, err := wal.OpenSegment(uint32(fid), fio.MMapFio)
+		if err != nil {
+			return 0, err
+		}
+		if i == len(fileIds)-1 {
+			//说明这个是最后一个id，就设置成活跃文件
+			wal.activeFile = segFile
+			wal.segmentID = uint32(fid)
+			wal.activeFile.SetIOManager(wal.option.dirPath, wal.option.fileSuffix, fio.StanderFIO) //设置成标准IO
+		} else {
+			//否则就放入到旧文件集合中
+			wal.olderFile[uint32(fid)] = segFile
+		}
+		segNum = i
+	}
+	return segNum, nil
+}
+
+//closeFiles 关闭掉所有的文件
+func (wal *Wal) closeFiles() error {
+	if wal.activeFile == nil {
+		return nil
+	}
+	if err := wal.activeFile.Sync(); err != nil {
+		return err
+	}
+	if err := wal.activeFile.Close(); err != nil {
+		return err
+	}
+	for _, file := range wal.olderFile {
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //Write 写入一个buf数据,并且返回具体写入的位置信息
@@ -183,7 +234,7 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 			//设置进旧文件集合中
 			wal.olderFile[wal.segmentID] = wal.activeFile
 			//新打开一个segment文件
-			wal.activeFile.SetIOManager(wal.option.dirPath, fio.MMapFio) //该文件达到阈值了，就设置成MMapIO
+			wal.activeFile.SetIOManager(wal.option.dirPath, wal.option.fileSuffix, fio.MMapFio) //该文件达到阈值了，就设置成MMapIO
 
 			wal.segmentID += 1
 			segfile, err := wal.OpenSegment(wal.segmentID, fio.StanderFIO)
@@ -241,6 +292,8 @@ func (wal *Wal) writePadding() {
 //Read 根据Pos位置来读取数据
 //读取完pos开始的一系列有效数据之后，返回下一个可以开始读取的chunk的位置信息
 func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
 	if pos.segmentID > wal.segmentID || pos.blockID > wal.BlockId {
 		return nil, nil, ErrPosNotValid
 	}
@@ -314,25 +367,14 @@ func (wal *Wal) Sync() error {
 
 //Close 关闭wal文件
 func (wal *Wal) Close() error {
-	if wal.activeFile == nil {
-		return nil
-	}
-	if wal.activeFile == nil {
-		return nil
-	}
-	if err := wal.activeFile.Close(); err != nil {
+	//关闭掉所有的文件
+	if err := wal.closeFiles(); err != nil {
 		return err
-	}
-
-	for _, file := range wal.olderFile {
-		if err := file.Close(); err != nil {
-			return err
-		}
 	}
 	return nil
 }
 
-//将数据进行编码,编码出一个chunk出来
+//encode 将数据进行编码,编码出一个chunk出来
 //Chunk的格式
 //CRC     +     length    +   type   +   payload
 //4       +       2       +    1     +     n
@@ -350,6 +392,8 @@ func encode(data []byte, chunkType ChunkType) []byte {
 
 //GetAllChunkPos 获得所有的chunkPos的信息
 func (wal *Wal) GetAllChunkPos() ([]*ChunkPos, error) {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
 	var chunkPosArray []*ChunkPos
 	var chunkPos = &ChunkPos{
 		segmentID:   0,

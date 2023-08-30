@@ -50,12 +50,8 @@ type Segment struct {
 //OpenSegment 打开一个新的segment文件
 func (wal *Wal) OpenSegment(segmentId uint32, ioType fio.IOManagerType) (*Segment, error) {
 	//打开一个文件
-	//fd, err := os.OpenFile(
-	//	GetSegmentFile(wal.option.dirPath, segmentId),
-	//	os.O_CREATE|os.O_RDWR|os.O_APPEND,
-	//	SegFilePerm,
-	//)
-	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.dirPath, segmentId), ioType)
+
+	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.dirPath, wal.option.fileSuffix, segmentId), ioType)
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +65,8 @@ func (wal *Wal) OpenSegment(segmentId uint32, ioType fio.IOManagerType) (*Segmen
 }
 
 //GetSegmentFile 获得当前seg文件的文件名字
-func GetSegmentFile(dirPath string, fileId uint32) string {
-	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d%s", fileId, SegFileSuffix))
+func GetSegmentFile(dirPath, fileSuffix string, fileId uint32) string {
+	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d%s", fileId, fileSuffix))
 	return fileName
 }
 
@@ -200,11 +196,11 @@ func (seg *Segment) Close() error {
 	return seg.IOManager.Close()
 }
 
-func (seg *Segment) SetIOManager(dirPath string, ioType fio.IOManagerType) error {
+func (seg *Segment) SetIOManager(dirPath, fileSuffix string, ioType fio.IOManagerType) error {
 	if err := seg.IOManager.Close(); err != nil {
 		return err
 	}
-	IOmanager, err := fio.NewIOManager(GetSegmentFile(dirPath, seg.SegmentId), ioType)
+	IOmanager, err := fio.NewIOManager(GetSegmentFile(dirPath, fileSuffix, seg.SegmentId), ioType)
 	if err != nil {
 		return err
 	}
