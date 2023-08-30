@@ -1,11 +1,11 @@
 package wal
 
 import (
+	"FlexDB/fio"
 	"encoding/binary"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"hash/crc32"
-	"os"
 	"path/filepath"
 )
 
@@ -40,7 +40,8 @@ const (
 
 //Segment 某一个具体的segment文件的信息
 type Segment struct {
-	fd        *os.File                   //文件描述符句柄
+	//fd        *os.File                   //文件描述符句柄
+	IOManager fio.IOManager              //IO管理
 	SegmentId uint32                     //标识当前的segmentId是多少
 	blockId   uint32                     //标识但前的blockId是从哪里开始的
 	cache     *lru.Cache[uint32, []byte] //读取缓存数据
@@ -49,13 +50,17 @@ type Segment struct {
 //OpenSegment 打开一个新的segment文件
 func (wal *Wal) OpenSegment(segmentId uint32) (*Segment, error) {
 	//打开一个文件
-	fd, err := os.OpenFile(
-		GetSegmentFile(wal.option.dirPath, segmentId),
-		os.O_CREATE|os.O_RDWR|os.O_APPEND,
-		SegFilePerm,
-	)
+	//fd, err := os.OpenFile(
+	//	GetSegmentFile(wal.option.dirPath, segmentId),
+	//	os.O_CREATE|os.O_RDWR|os.O_APPEND,
+	//	SegFilePerm,
+	//)
+	ioManager, err := fio.NewIOManager(GetSegmentFile(wal.option.dirPath, segmentId), fio.StanderFIO)
+	if err != nil {
+		return nil, err
+	}
 	seg := &Segment{
-		fd:        fd,
+		IOManager: ioManager,
 		SegmentId: segmentId,
 		blockId:   segmentId * SegmentMaxBlockNum,
 		cache:     wal.cache,
@@ -71,15 +76,16 @@ func GetSegmentFile(dirPath string, fileId uint32) string {
 
 //append
 func (seg *Segment) append(buf []byte) (int, error) {
-	return seg.fd.Write(buf)
+	return seg.IOManager.Write(buf)
 }
 
 func (seg *Segment) Size() (uint32, error) {
-	stat, err := seg.fd.Stat()
+	size, err := seg.IOManager.Size()
 	if err != nil {
 		return 0, err
 	}
-	return uint32(stat.Size()), nil
+	return uint32(size), nil
+
 }
 
 //ReadInternal 如果返回true，说明数据在当前的segment可以全部读取成功，否则就需要在开启第二个segment文件继续把数据读取完
@@ -171,16 +177,24 @@ func (seg *Segment) readChunk(blockBuf []byte, begin uint32) (ChunkType, []byte,
 	return blockType, data, nil
 }
 
-func (seg *Segment) readNByte(n uint32, offset uint32) (b []byte, err error) {
+func (seg *Segment) readNByte(n, offset uint32) (b []byte, err error) {
 	b = make([]byte, n)
-	_, err = seg.fd.ReadAt(b, int64(offset))
+	_, err = seg.IOManager.Read(b, int64(offset))
 	if err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-func GetCacheKey(segmentID uint32, blockID uint32) uint32 {
+func GetCacheKey(segmentID, blockID uint32) uint32 {
 	key := (segmentID & 0xFFFF) | ((blockID & 0xFFFF) << 16)
 	return key
+}
+
+func (seg *Segment) Sync() error {
+	return seg.IOManager.Sync()
+}
+
+func (seg *Segment) Close() error {
+	return seg.IOManager.Close()
 }

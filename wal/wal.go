@@ -19,11 +19,11 @@ type Wal struct {
 	activeFile      *Segment                   //当前指向的活跃的segment文件
 	olderFile       map[uint32]*Segment        //当前文件已经达到阈值之后就开辟一个新的文件来进行处理
 	mu              *sync.RWMutex              //当前Wal持有的读写锁
-	option          Option                     //当前的wal的配置项
+	option          WalOption                  //当前的wal的配置项
 	cache           *lru.Cache[uint32, []byte] //缓存block数据,key是blockId，value是一个block大小的缓存
 }
 
-type Option struct {
+type WalOption struct {
 	dirPath            string //所在的路经名
 	BlockSize          uint32 //一个block固定是32KB
 	SegmentMaxBlockNum uint32 //一个segment文件中最多可以存放多少个Block
@@ -31,7 +31,7 @@ type Option struct {
 	BlockCacheNum      int    //lru中可以缓存多少个Block节点
 }
 
-var defaultOpt = Option{
+var defaultOpt = WalOption{
 	dirPath:            "/home/zevin/tmp",
 	BlockSize:          20,
 	SegmentMaxBlockNum: 3,
@@ -40,7 +40,7 @@ var defaultOpt = Option{
 }
 
 //Open 打开一个Wal实例
-func Open(options Option) (*Wal, error) {
+func Open(options WalOption) (*Wal, error) {
 	//检查当前目录是否存在，如果不存在的话就需要创建
 	if _, err := os.Stat(options.dirPath); os.IsNotExist(err) {
 		//创建目录
@@ -71,7 +71,7 @@ func Open(options Option) (*Wal, error) {
 		if strings.HasSuffix(entry.Name(), SegFileSuffix) {
 			//对00001.data文件进行分割，拿到他的第一个部分00001
 
-			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(".seg")], "0") //去掉前导0
+			trimmedName := strings.TrimLeft(entry.Name()[:len(entry.Name())-len(SegFileSuffix)], "0") //去掉前导0
 			// 转换为文件ID
 			if trimmedName == "" {
 				trimmedName = "0"
@@ -87,7 +87,7 @@ func Open(options Option) (*Wal, error) {
 	//对文件ID进行排序，从小到大
 	sort.Ints(fileIds)
 	//遍历每个文件ID，打开对应的文件
-	var i int = 0
+	var segNum int = 0
 	for i, fid := range fileIds {
 		segFile, err := wal.OpenSegment(uint32(fid))
 		if err != nil {
@@ -101,16 +101,19 @@ func Open(options Option) (*Wal, error) {
 			//否则就放入到旧文件集合中
 			wal.olderFile[uint32(fid)] = segFile
 		}
+		segNum = i
 	}
-	blockID := uint32(i) * SegmentMaxBlockNum
+	blockID := uint32(segNum) * SegmentMaxBlockNum
 	if wal.activeFile != nil {
 		activeSize, err := wal.activeFile.Size()
 		if err != nil {
 			return nil, err
 		}
-		blockID += activeSize / BlockSize //这个问题
 		wal.currSegOffset = activeSize
+		//blockIdInCurrSeg:=activeSize/BlockSize
+		wal.currBlcokOffset = activeSize % BlockSize
 
+		blockID = blockID + activeSize/BlockSize //这个问题
 		wal.BlockId = blockID
 	}
 
@@ -231,9 +234,10 @@ func (wal *Wal) writePadding() {
 }
 
 //Read 根据Pos位置来读取数据
-func (wal *Wal) Read(pos *ChunkPos) ([]byte, error) {
+//读取完pos开始的一系列有效数据之后，返回下一个可以开始读取的chunk的位置信息
+func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
 	if pos.segmentID > wal.segmentID || pos.blockID > wal.BlockId {
-		return nil, ErrPosNotValid
+		return nil, nil, ErrPosNotValid
 	}
 	var segFile *Segment
 	if pos.segmentID == wal.segmentID {
@@ -244,28 +248,33 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, error) {
 		segFile = wal.olderFile[pos.segmentID]
 	}
 	var (
-		ret         []byte
-		blockId     = pos.blockID
-		chunkOffset = pos.chunkOffset
+		ret           []byte //返回的总数据长度
+		blockId       = pos.blockID
+		chunkOffset   = pos.chunkOffset
+		nextChunkPos  = &ChunkPos{segmentID: pos.segmentID}
+		segmentId     = pos.segmentID
+		singleDataNum uint32 //单次读取block获得有效数据的长度
 	)
 
 	for {
 		isComplete, numBlockRead, data, err := segFile.ReadInternal(blockId, chunkOffset)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		ret = append(ret, data...)
+		singleDataNum = uint32(len(data) + headerSize)
 		if isComplete {
 			//当前的segment文件完全可以将全部数据读取上来
 			break
 		} else {
 			//当前的数据无法在一个segment文件中全部读取上来,需要新开一个文件
-			if pos.segmentID+1 == wal.segmentID {
+			segmentId++
+			if segmentId == wal.segmentID {
 				//说明当前数据是在active中中
 				segFile = wal.activeFile
 			} else {
 				//数据在old文件中
-				segFile = wal.olderFile[pos.segmentID+1]
+				segFile = wal.olderFile[segmentId]
 			}
 
 			blockId += numBlockRead //更新需要读取到哪个block中
@@ -273,12 +282,49 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, error) {
 		}
 	}
 
-	return ret, nil
+	nextChunkPos.blockID = blockId     //更新下一个chunk读取的block的id是哪一个
+	nextChunkPos.segmentID = segmentId //更新下一次要读取数据所在的segment文件是哪一个
+	nextChunkPos.chunkOffset = chunkOffset + singleDataNum
+	if nextChunkPos.chunkOffset+headerSize >= wal.option.BlockSize {
+		//如果当前的需要开始读取的block小于一个header的大小
+		nextChunkPos.chunkOffset = 0
+		nextChunkPos.blockID++
+		if (nextChunkPos.segmentID+1)*wal.option.SegmentMaxBlockNum == nextChunkPos.blockID {
+			//更新segmentId
+			nextChunkPos.segmentID++
+		}
+	}
+
+	return ret, nextChunkPos, nil
 }
 
 //Sync 将当前的活跃文件进行持久化
 func (wal *Wal) Sync() error {
-	return wal.activeFile.fd.Sync()
+	if wal.activeFile == nil {
+		return nil
+	}
+	return wal.activeFile.Sync()
+
+}
+
+//Close 关闭wal文件
+func (wal *Wal) Close() error {
+	if wal.activeFile == nil {
+		return nil
+	}
+	if wal.activeFile == nil {
+		return nil
+	}
+	if err := wal.activeFile.Close(); err != nil {
+		return err
+	}
+
+	for _, file := range wal.olderFile {
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //将数据进行编码,编码出一个chunk出来
