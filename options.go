@@ -31,7 +31,7 @@ var DefaultOperations = Options{
 	IndexType:          Btree,
 	indexNum:           5,
 	BytePerSync:        0,
-	TimeSync:           0,
+	TimeSync:           2, //2s触发一次刷盘操作
 	MMapAtStartup:      true,
 	DataFileMergeRatio: 0.5,
 }

@@ -35,9 +35,10 @@ type DB struct {
 	seqNoFileExists        bool                      //存储事务序列号的文件是否存在
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
 	fileLock               *flock.Flock              //当前进程持有的文件锁,保证多进程之间互斥
-	ByteWritten            uint64                    //累积写了多少的字节
+	ByteWritten            uint64                    //记录一个周期中写入的字节数
 	reclaimSize            uint64                    //当前有多少字节是无效的
 	mergeInfo              MergeInfo                 //保存merge相关信息
+	exitSignal             chan struct{}             //退出信号的管道，用于控制Goroutine的退出
 }
 type Stat struct {
 	KeyNum          int    //key的总数量
@@ -82,6 +83,7 @@ func Open(options Options) (*DB, error) {
 		seqNo:                  nonTransactionSeq,
 		isInitialDBInitialized: isInitial,
 		fileLock:               fileFlock,
+		exitSignal:             make(chan struct{}),
 	}
 	db.initIndex()
 	//加载merge数据目录,将merge目录下的数据都移动过来
@@ -128,6 +130,9 @@ func Open(options Options) (*DB, error) {
 			return nil, err
 		}
 	}
+
+	//启动goroutine处理定时任务
+	go db.startBackgroundTask()
 	return db, nil
 }
 
@@ -284,6 +289,7 @@ func (db *DB) Delete(key []byte) (bool, error) {
 
 // Close 关闭数据库,清空所有的资源
 func (db *DB) Close() error {
+
 	defer func() {
 		if err := db.fileLock.Unlock(); err != nil {
 			panic("fail to unlock the directory")
@@ -294,6 +300,10 @@ func (db *DB) Close() error {
 	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	close(db.exitSignal) //发送退出信号给goRuntine
+	// 等待后台 Goroutine 完全退出
+	<-db.exitSignal
 	//关闭索引
 	for i := 0; i < db.options.indexNum; i++ {
 		node := "index" + strconv.Itoa(i)
@@ -322,6 +332,7 @@ func (db *DB) Sync() error {
 	return db.activeFile.Sync()
 }
 
+//Stat 获得当前db的状态,可以放到后台线程来进行执行,不定时进行更新
 func (db *DB) Stat() *Stat {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -393,16 +404,18 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	db.ByteWritten += size
 	//binary.LittleEndian.Uint32(encRecord[5:9])
 
-	//判断是否需要对数据进行安全的持久化操作
-	var needSync bool = db.options.SyncWrite
-	//写入的字节数到达用户要求的perSync的倍数就要进行持久化操作
-	if !needSync && db.options.BytePerSync > 0 && (db.ByteWritten%db.options.BytePerSync == 0) {
-		needSync = true
-	}
-	if needSync {
+	////判断是否需要对数据进行安全的持久化操作
+	//var needSync bool = db.options.SyncWrite
+	////写入的字节数到达用户要求的perSync的倍数就要进行持久化操作
+	//if !needSync && db.options.BytePerSync > 0 && db.ByteWritten > db.options.BytePerSync {
+	//	needSync = true
+	//}
+	if db.needSync() {
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
 		}
+		db.ByteWritten = 0 //重新将数据进行清零
+
 	}
 
 	//返回位置信息,包含当前的位置信息
@@ -410,6 +423,16 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 
 	return pos, nil
 
+}
+
+//needSync 判断当前是否需要进行持久化
+func (db *DB) needSync() bool {
+	var needSync bool = db.options.SyncWrite
+	//写入的字节数到达用户要求的perSync的倍数就要进行持久化操作
+	if !needSync && db.options.BytePerSync > 0 && db.ByteWritten > db.options.BytePerSync {
+		needSync = true
+	}
+	return needSync
 }
 
 //setActiveDataFile 设置当前活跃文件
@@ -654,6 +677,7 @@ func (db *DB) closeFiles() error {
 	if err := db.activeFile.Close(); err != nil {
 		return err
 	}
+	db.activeFile = nil
 
 	for _, file := range db.olderFile {
 		if err := file.Close(); err != nil {

@@ -71,6 +71,7 @@ func TestDB_WriteBatch2(t *testing.T) {
 
 	//重启
 	err = db.Close()
+	db = nil
 	assert.Nil(t, err)
 	db2, err := Open(opts)
 	assert.Nil(t, err)

@@ -39,8 +39,7 @@ func TestWal_Write1(t *testing.T) {
 	assert.Equal(t, uint32(9), wal.currBlcokOffset)
 	assert.Equal(t, uint32(1), wal.BlockId)
 	assert.Equal(t, uint32(0), wal.segmentID)
-	datas, chunkPosArr, err := wal.GetAllChunkInfo()
-	t.Log(datas)
+	_, chunkPosArr, err := wal.GetAllChunkInfo()
 	//当一个data包含在不同的block的时候，会出现问题
 	assert.Equal(t, 2, len(chunkPosArr))
 	assert.Nil(t, err)

@@ -408,7 +408,7 @@ func encode(data []byte, chunkType ChunkType) []byte {
 	return encBuf
 }
 
-//GetAllChunkPos 获得所有的chunkPos的信息
+// GetAllChunkInfo 获得所有的chunkPos的信息
 func (wal *Wal) GetAllChunkInfo() ([][]byte, []*ChunkPos, error) {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()

@@ -62,7 +62,7 @@ func TestDB_Put1(t *testing.T) {
 	opts.IndexType = Btree
 	opts.FileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
-	defer destroyDB(db)
+	//defer destroyDB(db)
 	assert.NotNil(t, db)
 	assert.Nil(t, err)
 
@@ -100,6 +100,7 @@ func TestDB_Put1(t *testing.T) {
 
 	//6.重启后再Put数据
 	err = db.Close()
+	db = nil
 	assert.Nil(t, err)
 
 	//7.重启数据库

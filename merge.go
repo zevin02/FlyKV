@@ -86,10 +86,10 @@ func (db *DB) doMerge() error {
 		db.mu.Unlock()
 		return err
 	}
-	//if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
-	//	db.mu.Unlock()
-	//	return ErrMergeRatioUnReached
-	//}
+	if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
+		db.mu.Unlock()
+		return ErrMergeRatioUnReached
+	}
 	//查看剩余容量是否可以容纳merge之后的数据量
 	availableDiskSize, err := utils.AvailableDiskSize()
 	if err != nil {
@@ -359,13 +359,7 @@ func (db *DB) getMergedInfo(dirPath string) (uint32, error) {
 
 //从hint文件中加载索引,hint中保存了key对应的位置信息
 func (db *DB) loadIndexFromHintFile() error {
-	//hintFileName := filepath.Join(db.options.DirPath, data.HintFileName) //前面已经将merge目录中的文件都移动到db目录中了，所以正常使用
-	//if _, err := os.Stat(hintFileName); os.IsNotExist(err) {
-	//	//当前的hint文件不存在，直接返回,不需要从hint文件中来构建索引
-	//	return nil
-	//}
-	//打开hint索引文件,根据hint文件中的记录来构建内存索引
-	//hintFile, err := data.OpenHintFile(db.options.DirPath, fio.MMapFio)
+
 	walOpt := wal.DefaultWalOpt
 	walOpt.DirPath = db.options.DirPath
 	walOpt.FileSuffix = ".hint"
@@ -375,25 +369,7 @@ func (db *DB) loadIndexFromHintFile() error {
 		return err
 	}
 	//hint中都是有效数据,读取数据文件,从磁盘中读取数据到内存中构建内存的索引
-	//var offset uint64 = 0
-	//for {
-	//	record, size, err := hintFile.ReadLogRecord(offset) //merge的时候
-	//	if err != nil {
-	//		if err == io.EOF {
-	//			break
-	//		}
-	//		return err
-	//	}
-	//	//解码获得位置信息
-	//	hintPos := data.DecodeLogRecordPos(record.Value) //获得hint中的索引信息
-	//	node, err := db.hashRing.Get(string(record.Key)) //获得对应实例
-	//	if err != nil {
-	//		return err
-	//	}
-	//	//根据位置信息来构建索引
-	//	db.index[node].Put(record.Key, hintPos)
-	//	offset += size
-	//}
+
 	encDatas, _, err := hintFile.GetAllChunkInfo()
 	if err != nil {
 		if err == wal.ErrEmpty {
@@ -422,7 +398,6 @@ func (db *DB) loadIndexFromHintFile() error {
 			if err != nil {
 				return nil
 			}
-			//todo key有问题
 			//解除key和value
 			//[low:high]左边是起始的索引位置，右边是结束的索引位置，不包含
 			logRecord.Key = kvBuf[:keySize]
@@ -436,6 +411,11 @@ func (db *DB) loadIndexFromHintFile() error {
 		//根据位置信息来构建索引
 		db.index[node].Put(logRecord.Key, hintPos)
 	}
+	//将hint文件关闭
+	if err := hintFile.Close(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
