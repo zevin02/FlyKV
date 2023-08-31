@@ -39,6 +39,11 @@ func TestWal_Write1(t *testing.T) {
 	assert.Equal(t, uint32(9), wal.currBlcokOffset)
 	assert.Equal(t, uint32(1), wal.BlockId)
 	assert.Equal(t, uint32(0), wal.segmentID)
+	datas, chunkPosArr, err := wal.GetAllChunkInfo()
+	t.Log(datas)
+	//当一个data包含在不同的block的时候，会出现问题
+	assert.Equal(t, 2, len(chunkPosArr))
+	assert.Nil(t, err)
 }
 
 //测试full+padding +full+first+midlle+last
@@ -70,6 +75,9 @@ func TestWal_Write2(t *testing.T) {
 	assert.Equal(t, uint32(12), wal.currBlcokOffset)
 	assert.Equal(t, uint32(3), wal.BlockId)
 	assert.Equal(t, uint32(1), wal.segmentID)
+	_, chunkPosArr, err := wal.GetAllChunkInfo()
+	assert.Equal(t, 3, len(chunkPosArr))
+	assert.Nil(t, err)
 }
 
 //测试full+full+full+padding+first+last+paddding+first+middle+last
@@ -108,6 +116,7 @@ func TestWal_Write3(t *testing.T) {
 	assert.Equal(t, uint32(8), wal.currBlcokOffset)
 	assert.Equal(t, uint32(6), wal.BlockId)
 	assert.Equal(t, uint32(2), wal.segmentID)
+
 }
 
 func TestWal_Read1(t *testing.T) {

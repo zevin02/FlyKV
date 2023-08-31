@@ -304,6 +304,7 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
 		//如果为空，就不能读取，返回一个消息
 		return nil, nil, ErrEmpty
 	}
+
 	if pos.segmentID > wal.segmentID || pos.blockID > wal.BlockId {
 		return nil, nil, ErrPosNotValid
 	}
@@ -316,21 +317,25 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
 		segFile = wal.olderFile[pos.segmentID]
 	}
 	var (
-		ret           []byte //返回的总数据长度
-		blockId       = pos.blockID
-		chunkOffset   = pos.chunkOffset
-		nextChunkPos  = &ChunkPos{segmentID: pos.segmentID}
-		segmentId     = pos.segmentID
-		singleDataNum uint32 //单次读取block获得有效数据的长度
+		ret            []byte //返回的总数据长度
+		blockId        = pos.blockID
+		chunkOffset    = pos.chunkOffset
+		nextChunkPos   = &ChunkPos{segmentID: pos.segmentID}
+		segmentId      = pos.segmentID
+		singleDataNum  uint32 //单次读取block获得有效数据的长度
+		preBlockId     = pos.blockID
+		preChunkOffset = pos.chunkOffset
 	)
 
 	for {
+
 		isComplete, numBlockRead, data, err := segFile.ReadInternal(blockId, chunkOffset)
 		if err != nil {
 			return nil, nil, err
 		}
 		ret = append(ret, data...)
-		singleDataNum = uint32(len(data) + headerSize)
+		singleDataNum += uint32(len(data)) + headerSize*numBlockRead
+		//data = nil
 		if isComplete {
 			//当前的segment文件完全可以将全部数据读取上来
 			break
@@ -344,18 +349,21 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
 				//数据在old文件中
 				segFile = wal.olderFile[segmentId]
 			}
-
 			blockId += numBlockRead //更新需要读取到哪个block中
+
 			chunkOffset = 0
 		}
 	}
 
-	nextChunkPos.blockID = blockId     //更新下一个chunk读取的block的id是哪一个
+	//TODO nextChunkPos的chunkOffset如果是最后一个的话，就有问题
 	nextChunkPos.segmentID = segmentId //更新下一次要读取数据所在的segment文件是哪一个
-	nextChunkPos.chunkOffset = chunkOffset + singleDataNum
+	nextChunkPos.chunkOffset = (preChunkOffset + singleDataNum) % wal.option.BlockSize
+	nextChunkPos.blockID = preBlockId + (preChunkOffset+singleDataNum)/wal.option.BlockSize //更新下一个chunk读取的block的id是哪一个
+
 	if nextChunkPos.chunkOffset+headerSize >= wal.option.BlockSize {
 		//如果当前的需要开始读取的block小于一个header的大小
-		nextChunkPos.chunkOffset = 0
+		//nextChunkPos.chunkOffset %= wal.option.BlockSize
+		nextChunkPos.chunkOffset = 0 //被padding填充了，所以直接从下一个block开始
 		nextChunkPos.blockID++
 		if (nextChunkPos.segmentID+1)*wal.option.SegmentMaxBlockNum == nextChunkPos.blockID {
 			//更新segmentId
@@ -416,7 +424,7 @@ func (wal *Wal) GetAllChunkInfo() ([][]byte, []*ChunkPos, error) {
 	}
 	var res [][]byte
 	for {
-		data, nextchunkPos, err := wal.Read(chunkPos)
+		data, nextchunkPos, err := wal.Read(chunkPos.Clone())
 		if err != nil {
 			//文件读取完了
 			if err == io.EOF || err == ErrPosNotValid {
@@ -426,9 +434,17 @@ func (wal *Wal) GetAllChunkInfo() ([][]byte, []*ChunkPos, error) {
 			}
 		}
 		res = append(res, data)
-
-		chunkPosArray = append(chunkPosArray, chunkPos)
+		chunkPosArray = append(chunkPosArray, chunkPos.Clone())
 		chunkPos = nextchunkPos //更新下一次要开始的chunk的位置
+		//走到这个位置之后，就无法继续往下面读取了
 	}
 	return res, chunkPosArray, nil
+}
+
+func (c *ChunkPos) Clone() *ChunkPos {
+	return &ChunkPos{
+		segmentID:   c.segmentID,
+		blockID:     c.blockID,
+		chunkOffset: c.chunkOffset,
+	}
 }

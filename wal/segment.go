@@ -6,6 +6,7 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"hash/crc32"
+	"io"
 	"path/filepath"
 )
 
@@ -93,6 +94,7 @@ func (seg *Segment) ReadInternal(blockId, chunkOffset uint32) (isComplete bool, 
 	if err != nil {
 		return false, 0, nil, err
 	}
+	//if chunkOffset>=
 	curSegBlockId := blockId - seg.blockId //计算需要查找的blockId在当前的segment文件中是第几个block
 	var (
 		i        uint32 = 0
@@ -105,7 +107,11 @@ func (seg *Segment) ReadInternal(blockId, chunkOffset uint32) (isComplete bool, 
 	for {
 		//(curSegBlockId+i)*BlockSize=当前的segment文件中的某个block在segment文件中的偏移位置
 		if curSegBlockId*seg.opts.BlockSize+begin+seg.opts.BlockSize > filesize {
+			//这个必须是最后一个block才可以走到这个地方
 			readByte = filesize - curSegBlockId*seg.opts.BlockSize
+			if readByte > seg.opts.BlockSize {
+				readByte = seg.opts.BlockSize
+			}
 		}
 		if readByte == 0 {
 			//说明当前已经没有数据可以读取了，需要在下一个segment文件中继续读取数据
@@ -122,6 +128,8 @@ func (seg *Segment) ReadInternal(blockId, chunkOffset uint32) (isComplete bool, 
 			return false, 0, nil, err
 		}
 		res = append(res, data...) //将data数据追加到res中
+		i++
+		curSegBlockId++
 		if blockType == Full || blockType == Last {
 			ok = true
 			break
@@ -129,8 +137,6 @@ func (seg *Segment) ReadInternal(blockId, chunkOffset uint32) (isComplete bool, 
 			//说明他是middle或者first，那么当前数据读取完之后，还需要继续读取下一个block块
 			begin = 0
 		}
-		i++
-		curSegBlockId++
 	}
 	return ok, i, res, nil
 }
@@ -159,6 +165,9 @@ func (seg *Segment) readBlock(curSegBlockId, readByte uint32) ([]byte, error) {
 //readChunk 根据给定的chunkoffset从block中读取chunk数据
 func (seg *Segment) readChunk(blockBuf []byte, begin uint32) (ChunkType, []byte, error) {
 	//buf now is a blocksize buf
+	if begin >= uint32(len(blockBuf)) {
+		return 0, nil, io.EOF
+	}
 	header := blockBuf[begin : begin+headerSize] //提取出来头部信息
 	blockType := header[6]
 	length := binary.LittleEndian.Uint16(header[4:])
