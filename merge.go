@@ -4,6 +4,7 @@ import (
 	"FlexDB/data"
 	"FlexDB/fio"
 	"FlexDB/utils"
+	"FlexDB/wal"
 	"io"
 	"log"
 	"os"
@@ -156,7 +157,15 @@ func (db *DB) doMerge() error {
 	}
 
 	//打开一个hint文件，保存位置索引信息
-	hintFile, err := data.OpenHintFile(mergePath, fio.StanderFIO)
+	//hintFile, err := data.OpenHintFile(mergePath, fio.StanderFIO)
+	//hintFile,err:=wal.Open(wal.WalOption{
+	//	mergePath,32*1024,32,32*32*1024,20,string("suffix")})
+	//walOpts:=
+	walOpt := wal.DefaultWalOpt
+	walOpt.DirPath = mergePath
+	walOpt.FileSuffix = ".hint"
+	hintFile, err := wal.Open(walOpt) //使用wal来管理hint文件
+
 	if err != nil {
 		return err
 	}
@@ -193,19 +202,28 @@ func (db *DB) doMerge() error {
 					return err
 				}
 				//将当前的位置索引信息添加到HINT文件中
-				if err := hintFile.WriteHintRecord(realKey, pos); err != nil {
-					return err
+				//if err := hiantFile.WriteHintRecord(realKey, pos); err != nil {
+				//	return err
+				//}
+				//编码出logrecord数据
+				record := &data.LogRecord{
+					Key:   realKey,
+					Value: data.EncodeLogRecordPos(pos),
 				}
-
+				encRecord, _ := data.EncodeLogRecord(record)
+				hintFile.Write(encRecord) //将编码之后的key和value写入到WAL中
 			}
 			//递增offset
 			offset += size
-
 		}
 	}
 
 	//对hint文件，已经merge生成的文件进行持久化，保证数据都写入到磁盘中了
 	if err := hintFile.Sync(); err != nil {
+		return err
+	}
+	//将当前的hint-wal文件关闭
+	if err := hintFile.Close(); err != nil {
 		return err
 	}
 	if err := mergeDB.Sync(); err != nil {
@@ -341,35 +359,82 @@ func (db *DB) getMergedInfo(dirPath string) (uint32, error) {
 
 //从hint文件中加载索引,hint中保存了key对应的位置信息
 func (db *DB) loadIndexFromHintFile() error {
-	hintFileName := filepath.Join(db.options.DirPath, data.HintFileName) //前面已经将merge目录中的文件都移动到db目录中了，所以正常使用
-	if _, err := os.Stat(hintFileName); os.IsNotExist(err) {
-		//当前的hint文件不存在，直接返回,不需要从hint文件中来构建索引
-		return nil
-	}
+	//hintFileName := filepath.Join(db.options.DirPath, data.HintFileName) //前面已经将merge目录中的文件都移动到db目录中了，所以正常使用
+	//if _, err := os.Stat(hintFileName); os.IsNotExist(err) {
+	//	//当前的hint文件不存在，直接返回,不需要从hint文件中来构建索引
+	//	return nil
+	//}
 	//打开hint索引文件,根据hint文件中的记录来构建内存索引
-	hintFile, err := data.OpenHintFile(db.options.DirPath, fio.MMapFio)
+	//hintFile, err := data.OpenHintFile(db.options.DirPath, fio.MMapFio)
+	walOpt := wal.DefaultWalOpt
+	walOpt.DirPath = db.options.DirPath
+	walOpt.FileSuffix = ".hint"
+	hintFile, err := wal.Open(walOpt) //使用wal来管理hint文件
+
 	if err != nil {
 		return err
 	}
 	//hint中都是有效数据,读取数据文件,从磁盘中读取数据到内存中构建内存的索引
-	var offset uint64 = 0
-	for {
-		record, size, err := hintFile.ReadLogRecord(offset) //merge的时候
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
+	//var offset uint64 = 0
+	//for {
+	//	record, size, err := hintFile.ReadLogRecord(offset) //merge的时候
+	//	if err != nil {
+	//		if err == io.EOF {
+	//			break
+	//		}
+	//		return err
+	//	}
+	//	//解码获得位置信息
+	//	hintPos := data.DecodeLogRecordPos(record.Value) //获得hint中的索引信息
+	//	node, err := db.hashRing.Get(string(record.Key)) //获得对应实例
+	//	if err != nil {
+	//		return err
+	//	}
+	//	//根据位置信息来构建索引
+	//	db.index[node].Put(record.Key, hintPos)
+	//	offset += size
+	//}
+	encDatas, _, err := hintFile.GetAllChunkInfo()
+	if err != nil {
+		if err == wal.ErrEmpty {
+			return nil
+		} else {
 			return err
 		}
-		//解码获得位置信息
-		hintPos := data.DecodeLogRecordPos(record.Value) //获得hint中的索引信息
-		node, err := db.hashRing.Get(string(record.Key)) //获得对应实例
+	}
+	//var i=0
+	for _, encData := range encDatas {
+		//i++
+		//当前的data是经过编码之后的，包含了key和value
+		header, headerSize := data.DecodeLogRecordHeader(encData)
+		if header == nil {
+			//头部为空，没有读取到，就说明这个文件为空，或者已经读取完了
+			return nil
+		}
+		if header.Crc == 0 && header.KeySize == 0 && header.ValueSize == 0 {
+			return nil
+		}
+		//取出key和value的长度
+		keySize, valueSize := header.KeySize, header.ValueSize
+		logRecord := &data.LogRecord{Type: header.RecordType}
+		if keySize > 0 || valueSize > 0 {
+			kvBuf := encData[headerSize:]
+			if err != nil {
+				return nil
+			}
+			//todo key有问题
+			//解除key和value
+			//[low:high]左边是起始的索引位置，右边是结束的索引位置，不包含
+			logRecord.Key = kvBuf[:keySize]
+			logRecord.Value = kvBuf[keySize:]
+		}
+		hintPos := data.DecodeLogRecordPos(logRecord.Value) //获得hint中的索引信息
+		node, err := db.hashRing.Get(string(logRecord.Key)) //获得对应实例
 		if err != nil {
 			return err
 		}
 		//根据位置信息来构建索引
-		db.index[node].Put(record.Key, hintPos)
-		offset += size
+		db.index[node].Put(logRecord.Key, hintPos)
 	}
 	return nil
 }

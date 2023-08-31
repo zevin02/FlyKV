@@ -150,6 +150,8 @@ func (df *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
 	encRecord, _ := EncodeLogRecord(record)
 	return df.Write(encRecord)
 }
+
+//WriteAndSyncMergeFinishRecord 写入持久化并关闭
 func (df *DataFile) WriteAndSyncMergeFinishRecord(key []byte, nonMergeFileId int) error {
 	//
 	mergeFinRecord := &LogRecord{
@@ -163,6 +165,9 @@ func (df *DataFile) WriteAndSyncMergeFinishRecord(key []byte, nonMergeFileId int
 	}
 
 	if err := df.Sync(); err != nil {
+		return err
+	}
+	if err := df.Close(); err != nil {
 		return err
 	}
 	return nil

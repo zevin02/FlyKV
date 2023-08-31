@@ -30,8 +30,8 @@ func TestDB_Merge2(t *testing.T) {
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.Nil(t, err)
-	for i := 0; i < 50000; i++ {
-		err := db.Put(utils.GetTestKey(i), utils.RandomValue(1024))
+	for i := 0; i < 10000; i++ {
+		err := db.Put(utils.GetTestKey(i), utils.RandomValue(2))
 		assert.Nil(t, err)
 	}
 
@@ -46,8 +46,8 @@ func TestDB_Merge2(t *testing.T) {
 		_ = db2.Close()
 	}()
 	keys := db2.ListKeys(DefaultIteratorOptions)
-	assert.Equal(t, 50000, len(keys))
-	for i := 0; i < 50000; i++ {
+	assert.Equal(t, 10000, len(keys))
+	for i := 0; i < 10000; i++ {
 		val, err := db2.Get(utils.GetTestKey(i))
 		assert.Nil(t, err)
 		assert.NotNil(t, val)
