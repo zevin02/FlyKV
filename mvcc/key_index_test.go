@@ -47,3 +47,12 @@ func TestGet(t *testing.T) {
 	rev = ki.get(9)
 
 }
+
+//测试treeindex的正常使用
+func TestTreeIndex(t *testing.T) {
+	ti := NewTreeIndex() //创建一个treeIndex对像
+	ti.Put([]byte("foo"), Revision{1, 0})
+	rev, err := ti.Get([]byte("foo"), 2)
+	assert.Nil(t, err)
+	assert.NotNil(t, rev)
+}

@@ -52,6 +52,7 @@ func (KI *KeyIndex) get(rev int64) *Revision {
 	return nil
 }
 
+//put 给当前的keyIndex中添加一个revision
 func (KI *KeyIndex) put(main, sub int64) {
 	rev := Revision{main, sub}
 	if rev.Main <= KI.modified.Main {
