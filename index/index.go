@@ -6,7 +6,7 @@ import (
 	"github.com/google/btree"
 )
 
-//TODO使用哈希来构建使用多个索引，减小索引锁的粒度
+//内存的索引key，就是用key+revision，在compact的时候把过期的索引去掉，在后台线程上进行周期性的过期数据的清理
 
 //Indexer 定义一个抽象索引接口(内存索引)
 //Get拿到索引的位置信息

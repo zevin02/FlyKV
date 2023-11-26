@@ -42,7 +42,8 @@ type DB struct {
 	mergeInfo              MergeInfo                 //保存merge相关信息
 	exitSignal             chan struct{}             //退出信号的管道，用于控制Goroutine的退出
 	stat                   *Stat                     //记录某一个时刻的db的状态
-	lastestRevison         mvcc.Revision             //下一次进来需要使用的版本号
+	lastestRevison         int64                     //下一次进来需要使用的版本号
+	versionIndex           *mvcc.TreeIndex           //全局只能拥有一个TreeIndex
 }
 
 //Stat 可以记录某一个时刻的db状态
@@ -90,6 +91,7 @@ func Open(options Options) (*DB, error) {
 		isInitialDBInitialized: isInitial,
 		fileLock:               fileFlock,
 		exitSignal:             make(chan struct{}),
+		versionIndex:           mvcc.NewTreeIndex(), //初始化一个版本的索引树，当前的数据还没有实现对数据的持久化
 	}
 	db.initIndex()
 	//加载merge数据目录,将merge目录下的数据都移动过来
@@ -148,6 +150,13 @@ func (db *DB) Put(key []byte, value []byte) error {
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
 	}
+	rev := mvcc.Revision{Main: db.lastestRevison, Sub: 0}
+	db.lastestRevison++
+	revEncoded := rev.Encode()
+	//将当前的版本版本链信息添加到keyindex中进行管理
+	db.versionIndex.Put(key, rev)
+	key = append(key, revEncoded...) //当前的key追加上这个序列化之后的版本号信息
+
 	//构造LogRecord结构体
 	logRecord := &data.LogRecord{
 		Key:   logRecordKeyWithSeq(key, nonTransactionSeq), //普通的key也加上这个，来辨别是否为事务
@@ -170,7 +179,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	return nil
 }
 
-//Get 根据Key读取数据
+//Get 根据Key读取数据,根据当前的revision信息进行处理
 //TODO 可以实现一个读缓存来存储一些数据，避免每次直接进行磁盘IO，可以考虑使用LRU（用到节点中里面的timestamp和内存索引的timestamp比较，看是否返回），同时也可以考虑使用布隆过滤器来过滤没找到的key，就不需要要取查找
 func (db *DB) Get(key []byte) ([]byte, error) {
 	//打开读锁
@@ -179,6 +188,16 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, ErrKeyIsEmpty
 	}
+
+	//在这里使用revisionIndex，在版本链中查找到指定的revision信息
+	rev, err := db.versionIndex.Get(key, db.lastestRevison)
+	if rev == nil || err != nil {
+		return nil, err
+	}
+	key = append(key, rev.Encode()...)
+
+	db.lastestRevison++
+
 	//从内存中拿出索引位置信息
 	node, err := db.hashRing.Get(string(key)) //获得对应实例
 	if err != nil {

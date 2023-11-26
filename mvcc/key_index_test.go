@@ -49,10 +49,31 @@ func TestGet(t *testing.T) {
 }
 
 //测试treeindex的正常使用
-func TestTreeIndex(t *testing.T) {
+func TestTreeIndex1(t *testing.T) {
 	ti := NewTreeIndex() //创建一个treeIndex对像
 	ti.Put([]byte("foo"), Revision{1, 0})
 	rev, err := ti.Get([]byte("foo"), 2)
 	assert.Nil(t, err)
 	assert.NotNil(t, rev)
+	ti.Put([]byte("foo"), Revision{2, 0})
+	ti.Put([]byte("foo"), Revision{3, 0})
+	ti.Put([]byte("foo"), Revision{4, 0})
+	rev, err = ti.Get([]byte("foo"), 3)
+	assert.Nil(t, err)
+	err = ti.Tombstone([]byte("foo"), Revision{5, 0})
+	assert.Nil(t, err)
+	ti.Put([]byte("foo"), Revision{6, 0})
+	ti.Put([]byte("foo"), Revision{7, 0})
+	ti.Put([]byte("foo"), Revision{8, 0})
+	rev, err = ti.Get([]byte("foo"), 8)
+	assert.Nil(t, err)
+}
+
+//进行正常的测试
+func TestTreeIndex2(t *testing.T) {
+	ti := NewTreeIndex() //创建一个treeIndex对像
+	ti.Put([]byte("foo"), Revision{1, 0})
+	rev, err := ti.Get([]byte("foo1"), 2)
+	assert.Nil(t, rev)
+	assert.Equal(t, ErrRevisionNotFound, err)
 }

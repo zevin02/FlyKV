@@ -17,10 +17,8 @@ type WriteBatch struct {
 	mu           *sync.Mutex
 	db           *DB
 	pendingWrite map[string]*data.LogRecord //暂存用户写入的数据
-
 }
 
-//第一次进来
 //NewWriteBatch 初始化WriteBatch
 func (db *DB) NewWriteBatch(options WriteBatchOptions) *WriteBatch {
 	//如果是B+树，同时事务序列号文件不存在（不存在可能是第一次进来），且不是第一次加载数据库的时候，就要panic
