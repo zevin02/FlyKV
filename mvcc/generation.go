@@ -11,7 +11,8 @@ type generation struct {
 func (g *generation) findRevision(rev int64) *Revision {
 	//从最后一个版本号开始往前遍历
 	for i := len(g.revs) - 1; i >= 0; i-- {
-		if g.revs[i].Main <= rev {
+		//找到的是小于当前的rev的最大revision
+		if g.revs[i].Main < rev {
 			return &g.revs[i]
 		}
 	}

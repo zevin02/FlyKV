@@ -26,7 +26,7 @@ func (KI *KeyIndex) findGenration(rev int64) *generation {
 		}
 		if i != lastg {
 			//说明不是最后一个generation，所以当前generation的最后一个revision是一个tomb
-			if tomb := KI.generations[i].revs[len(KI.generations[i].revs)-1].Main; tomb <= rev {
+			if tomb := KI.generations[i].revs[len(KI.generations[i].revs)-1].Main; tomb < rev {
 				return nil
 			}
 		}
@@ -39,7 +39,7 @@ func (KI *KeyIndex) findGenration(rev int64) *generation {
 
 //get 在当前的rev下查找到符合条件的revision，这个地方一次只能得到一个符合条件的revision
 func (KI *KeyIndex) get(rev int64) *Revision {
-	g := KI.findGenration(rev)
+	g := KI.findGenration(rev) //先找到一个符合条件的generation
 	//如果当前的是空的generation，说明当前就没有符合条件的revision进行返回
 	if g.IsEmpty() {
 		return nil
@@ -63,7 +63,7 @@ func (KI *KeyIndex) put(main, sub int64) {
 		KI.generations = append(KI.generations, generation{})
 	}
 	//操作最新的一个generation
-	latestG := KI.generations[len(KI.generations)-1]
+	latestG := &KI.generations[len(KI.generations)-1]
 	if len(latestG.revs) == 0 {
 		latestG.created = rev
 	}
@@ -85,5 +85,5 @@ func (KI *KeyIndex) Tombstone(main int64) error {
 
 //IsEmpty 如果当前的generation是空的
 func (KI *KeyIndex) IsEmpty() bool {
-	return len(KI.generations) == 1 || KI.generations[0].IsEmpty()
+	return len(KI.generations) == 1 && KI.generations[0].IsEmpty()
 }
