@@ -96,7 +96,7 @@ func (db *DB) doMerge() error {
 		db.mu.Unlock()
 		return err
 	}
-	if uint64(totalSize-db.reclaimSize) >= availableDiskSize {
+	if totalSize-db.reclaimSize >= availableDiskSize {
 		db.mu.Unlock()
 		return ErrNoEnoughSpaceForMerge
 	}
@@ -304,8 +304,8 @@ func (db *DB) loadMergeFiles() error {
 	var fileId uint32 = 0
 
 	for ; fileId < db.mergeInfo.nonMergeFildId; fileId++ {
-		fileName := data.GetDataFileName(db.options.DirPath, uint32(fileId))
-		fileMergeName := data.GetDataFileName(mergePath, uint32(fileId))
+		fileName := data.GetDataFileName(db.options.DirPath, fileId)
+		fileMergeName := data.GetDataFileName(mergePath, fileId)
 
 		if _, err := os.Stat(fileName); err == nil {
 			//该文件存在,就需要进行删除
@@ -422,15 +422,15 @@ func (db *DB) loadIndexFromHintFile() error {
 func (db *DB) openMergeFile() error {
 	for fid := uint32(0); fid < db.mergeInfo.nonMergeFildId; fid++ {
 		if fid <= db.mergeInfo.maxFileID {
-			dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fid), fio.MMapFio)
+			dataFile, err := data.OpenDataFile(db.options.DirPath, fid, fio.MMapFio)
 			if err != nil {
 				return err
 			}
 			//否则就放入到旧文件集合中
-			db.olderFile[uint32(fid)] = dataFile
+			db.olderFile[fid] = dataFile
 		} else {
 			//删除无用的文件
-			delete(db.olderFile, uint32(fid))
+			delete(db.olderFile, fid)
 		}
 	}
 

@@ -138,7 +138,7 @@ func (wal *Wal) loadFiles() ([]int, error) {
 //openFiles 打开所有的segment文件
 func (wal *Wal) openFiles(fileIds []int) (int, error) {
 	//遍历每个文件ID，打开对应的文件
-	var segNum int = 0
+	var segNum = 0
 	for i, fid := range fileIds {
 		segFile, err := wal.OpenSegment(uint32(fid), wal.option, fio.MMapFio)
 		if err != nil {
@@ -148,7 +148,10 @@ func (wal *Wal) openFiles(fileIds []int) (int, error) {
 			//说明这个是最后一个id，就设置成活跃文件
 			wal.activeFile = segFile
 			wal.segmentID = uint32(fid)
-			wal.activeFile.SetIOManager(wal.option.DirPath, wal.option.FileSuffix, fio.StanderFIO) //设置成标准IO
+			err := wal.activeFile.SetIOManager(wal.option.DirPath, wal.option.FileSuffix, fio.StanderFIO)
+			if err != nil {
+				return 0, err
+			} //设置成标准IO
 		} else {
 			//否则就放入到旧文件集合中
 			wal.olderFile[uint32(fid)] = segFile
@@ -239,7 +242,10 @@ func (wal *Wal) Write(data []byte) (*ChunkPos, error) {
 			//设置进旧文件集合中
 			wal.olderFile[wal.segmentID] = wal.activeFile
 			//新打开一个segment文件
-			wal.activeFile.SetIOManager(wal.option.DirPath, wal.option.FileSuffix, fio.MMapFio) //该文件达到阈值了，就设置成MMapIO
+			err := wal.activeFile.SetIOManager(wal.option.DirPath, wal.option.FileSuffix, fio.MMapFio)
+			if err != nil {
+				return nil, err
+			} //该文件达到阈值了，就设置成MMapIO
 
 			wal.segmentID += 1
 			segfile, err := wal.OpenSegment(wal.segmentID, wal.option, fio.StanderFIO)
@@ -355,7 +361,6 @@ func (wal *Wal) Read(pos *ChunkPos) ([]byte, *ChunkPos, error) {
 		}
 	}
 
-	//TODO nextChunkPos的chunkOffset如果是最后一个的话，就有问题
 	nextChunkPos.segmentID = segmentId //更新下一次要读取数据所在的segment文件是哪一个
 	nextChunkPos.chunkOffset = (preChunkOffset + singleDataNum) % wal.option.BlockSize
 	nextChunkPos.blockID = preBlockId + (preChunkOffset+singleDataNum)/wal.option.BlockSize //更新下一个chunk读取的block的id是哪一个

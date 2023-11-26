@@ -17,6 +17,7 @@ type WriteBatch struct {
 	mu           *sync.Mutex
 	db           *DB
 	pendingWrite map[string]*data.LogRecord //暂存用户写入的数据
+
 }
 
 //第一次进来

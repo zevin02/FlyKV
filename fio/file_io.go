@@ -1,6 +1,8 @@
 package fio
 
-import "os"
+import (
+	"os"
+)
 
 //标准系统文件IO
 type FileIO struct {
@@ -11,6 +13,7 @@ type FileIO struct {
 //fileName 要打开文件的路径名字
 func NewFileIOManager(fileName string) (*FileIO, error) {
 	//打开一个文件
+	//使用O_DIRECT标志位打开，可以避免数据在内核缓冲区中复制（跳过了文件系统缓存层）,提高IO性能
 	fd, err := os.OpenFile(
 		fileName,
 		os.O_CREATE|os.O_RDWR|os.O_APPEND,
@@ -20,6 +23,7 @@ func NewFileIOManager(fileName string) (*FileIO, error) {
 	if err != nil {
 		return nil, err
 	}
+	//添加超时机制，如果文件打开的时间过长，就会造成性能阻塞，影响系统稳定性
 
 	return &FileIO{fd: fd}, nil
 }

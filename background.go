@@ -10,6 +10,7 @@ func (db *DB) startBackgroundTask() {
 	//创建一些定时触发的操作
 
 	flushTicker := time.NewTicker(time.Duration(db.options.TimeSync) * time.Second) //创建刷盘定时器
+	StatTicker := time.NewTicker(time.Duration(db.options.TimeGetStat) * time.Second)
 	defer flushTicker.Stop()
 	for {
 		select {
@@ -18,6 +19,9 @@ func (db *DB) startBackgroundTask() {
 			if err := db.Sync(); err != nil {
 				log.Printf("Flush error :%s \n", err)
 			}
+		case <-StatTicker.C:
+			db.Stat()
+
 		case <-db.exitSignal:
 			//如果用户Close DB，就退出当前的goroutine
 			return
@@ -28,7 +32,12 @@ func (db *DB) startBackgroundTask() {
 					log.Printf("Flush error :%s \n", err)
 				}
 			}
-			//判断是否需要进行merge操作
+			//判断是否需要进行merge操作,如果打到阈值才开始操作
+			if db.stat != nil && db.stat.DiskSize != 0 && float32(db.reclaimSize)/float32(db.stat.DiskSize) > db.options.DataFileMergeRatio {
+				if err := db.Merge(false); err != nil {
+					log.Printf("Background Merge error:%s \n", err)
+				}
+			}
 
 		}
 

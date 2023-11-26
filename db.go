@@ -4,6 +4,7 @@ import (
 	"FlexDB/data"
 	"FlexDB/fio"
 	"FlexDB/index"
+	"FlexDB/mvcc"
 	"FlexDB/utils"
 	"encoding/binary"
 	"github.com/gofrs/flock"
@@ -22,6 +23,7 @@ const (
 	fileFlockName = "fileFlcok"
 )
 
+//使用key找到他的keyindex
 //DB Bitcask存储引擎的实例
 type DB struct {
 	fileIds                []int   //文件ID，只能在加载索引的时候使用
@@ -36,10 +38,14 @@ type DB struct {
 	isInitialDBInitialized bool                      //是否是第一次初始化此数据目录
 	fileLock               *flock.Flock              //当前进程持有的文件锁,保证多进程之间互斥
 	ByteWritten            uint64                    //记录一个周期中写入的字节数
-	reclaimSize            uint64                    //当前有多少字节是无效的
+	reclaimSize            uint64                    //这个是记录当前有多少字节是无效的
 	mergeInfo              MergeInfo                 //保存merge相关信息
 	exitSignal             chan struct{}             //退出信号的管道，用于控制Goroutine的退出
+	stat                   *Stat                     //记录某一个时刻的db的状态
+	lastestRevison         mvcc.Revision             //下一次进来需要使用的版本号
 }
+
+//Stat 可以记录某一个时刻的db状态
 type Stat struct {
 	KeyNum          int    //key的总数量
 	DataFileNum     uint   //磁盘中数据文件的数量
@@ -387,7 +393,10 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 			return nil, err
 		}
 		//持久化之后，修改成MMap方式,无法进行修改，加快文件的读取
-		db.setIoManger(fio.MMapFio)
+		err := db.setIoManger(fio.MMapFio)
+		if err != nil {
+			return nil, err
+		}
 		//设置进旧的文件集合中
 		db.olderFile[db.activeFile.FileId] = db.activeFile
 		//再打开一个新的活跃文件
@@ -427,7 +436,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 
 //needSync 判断当前是否需要进行持久化
 func (db *DB) needSync() bool {
-	var needSync bool = db.options.SyncWrite
+	var needSync = db.options.SyncWrite
 	//写入的字节数到达用户要求的perSync的倍数就要进行持久化操作
 	if !needSync && db.options.BytePerSync > 0 && db.ByteWritten > db.options.BytePerSync {
 		needSync = true

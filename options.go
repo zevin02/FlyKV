@@ -11,6 +11,7 @@ type Options struct {
 	TimeSync           uint    //每隔多少秒就进行一次持久化
 	MMapAtStartup      bool    //在启动的时候使用使用mmap来加载
 	DataFileMergeRatio float32 //数据文件的无效数据达到多少的数据文件多少比例进行merge的阈值
+	TimeGetStat        uint    //过多长时间获得db的状态
 }
 
 type IndexType = int8
@@ -20,7 +21,7 @@ const (
 	Btree IndexType = iota
 	//ART 自适应基数树索引
 	ART
-	//B+树索引
+	// BPT Bplus Tree 索引
 	BPT
 )
 
@@ -34,6 +35,7 @@ var DefaultOperations = Options{
 	TimeSync:           2, //2s触发一次刷盘操作
 	MMapAtStartup:      true,
 	DataFileMergeRatio: 0.5,
+	TimeGetStat:        1,
 }
 
 //IteratorOptions 索引迭代器的配置项
