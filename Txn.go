@@ -10,7 +10,7 @@ type TXN struct {
 func (db *DB) NewTXN(options WriteBatchOptions) *TXN {
 	return &TXN{
 		writeView: db.NewWriteBatch(options),
-		beginRev:  db.lastestRevison, //当前事务启动时候的版本号
+		beginRev:  db.latestRevison, //当前事务启动时候的版本号
 		nextSub:   0,
 	}
 

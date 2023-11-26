@@ -42,8 +42,8 @@ type DB struct {
 	mergeInfo              MergeInfo                 //保存merge相关信息
 	exitSignal             chan struct{}             //退出信号的管道，用于控制Goroutine的退出
 	stat                   *Stat                     //记录某一个时刻的db的状态
-	lastestRevison         int64                     //下一次进来需要使用的版本号
-	versionIndex           *mvcc.TreeIndex           //全局只能拥有一个TreeIndex
+	latestRevison          int64                     //下一次进来需要使用的版本号
+	versionIndex           *mvcc.TreeIndex           //全局只能拥有一个TreeIndex，这个是内存级别的，所以在db启动的时候，就需要构造这个对象,我们可以使用WAL，把数据存储在WAL中
 }
 
 //Stat 可以记录某一个时刻的db状态
@@ -150,8 +150,9 @@ func (db *DB) Put(key []byte, value []byte) error {
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
 	}
-	rev := mvcc.Revision{Main: db.lastestRevison, Sub: 0}
-	db.lastestRevison++
+	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
+	//更新当前的版本号
+	db.latestRevison++
 	revEncoded := rev.Encode()
 	//将当前的版本版本链信息添加到keyindex中进行管理
 	db.versionIndex.Put(key, rev)
@@ -190,13 +191,14 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	}
 
 	//在这里使用revisionIndex，在版本链中查找到指定的revision信息
-	rev, err := db.versionIndex.Get(key, db.lastestRevison)
+	rev, err := db.versionIndex.Get(key, db.latestRevison)
 	if rev == nil || err != nil {
-		return nil, err
+		//当前的versionIndex中
+		return nil, ErrKeyNotFound
 	}
 	key = append(key, rev.Encode()...)
-
-	db.lastestRevison++
+	//更新当前的版本号
+	db.latestRevison++
 
 	//从内存中拿出索引位置信息
 	node, err := db.hashRing.Get(string(key)) //获得对应实例
@@ -274,6 +276,12 @@ func (db *DB) Delete(key []byte) (bool, error) {
 	if len(key) == 0 {
 		return false, ErrKeyIsEmpty
 	}
+	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
+	db.versionIndex.Tombstone(key, rev)
+	db.latestRevison++
+	revEncoded := rev.Encode()
+	key = append(key, revEncoded...) //当前的key追加上这个序列化之后的版本号信息
+
 	//在内存索引中查找这个key是否存在,避免用户一致调用delete方法去删除一个不存在的key，导致磁盘文件膨胀
 	node, err := db.hashRing.Get(string(key)) //获得对应实例
 	if err != nil {
