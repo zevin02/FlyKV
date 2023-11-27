@@ -42,7 +42,7 @@ type DB struct {
 	mergeInfo              MergeInfo                 //保存merge相关信息
 	exitSignal             chan struct{}             //退出信号的管道，用于控制Goroutine的退出
 	stat                   *Stat                     //记录某一个时刻的db的状态
-	latestRevison          int64                     //下一次进来需要使用的版本号
+	latestRevison          int64                     //下一次进来需要使用的版本号,修改，之后使用seqNo
 	versionIndex           *mvcc.TreeIndex           //全局只能拥有一个TreeIndex，这个是内存级别的，所以在db启动的时候，就需要构造这个对象,我们可以使用WAL，把数据存储在WAL中
 }
 
@@ -152,10 +152,12 @@ func (db *DB) Put(key []byte, value []byte) error {
 	}
 	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
 	//更新当前的版本号
+	//TODO db.latestRevision use atomic addition seqNo := atomic.AddUint64(&wb.db.seqNo, 1) //原子加1
+
 	db.latestRevison++
 	revEncoded := rev.Encode()
-	//将当前的版本版本链信息添加到keyindex中进行管理
-	db.versionIndex.Put(key, rev)
+	//将当前的版本版本链信息添加到keyIndex中进行管理
+	db.VersionPut(key, rev)
 	key = append(key, revEncoded...) //当前的key追加上这个序列化之后的版本号信息
 
 	//构造LogRecord结构体
@@ -191,7 +193,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	}
 
 	//在这里使用revisionIndex，在版本链中查找到指定的revision信息
-	rev, err := db.versionIndex.Get(key, db.latestRevison)
+	rev, err := db.VersionGet(key)
 	if rev == nil || err != nil {
 		//当前的versionIndex中
 		return nil, ErrKeyNotFound
@@ -277,7 +279,7 @@ func (db *DB) Delete(key []byte) (bool, error) {
 		return false, ErrKeyIsEmpty
 	}
 	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
-	db.versionIndex.Tombstone(key, rev)
+	db.VersionDelete(key, rev)
 	db.latestRevison++
 	revEncoded := rev.Encode()
 	key = append(key, revEncoded...) //当前的key追加上这个序列化之后的版本号信息
@@ -757,4 +759,19 @@ func (db *DB) initIndex() {
 		db.index[node] = index.NewIndex(db.options.IndexType, db.options.DirPath, node, db.options.SyncWrite) //初始化内存索引
 	}
 
+}
+
+//VersionPut 在版本索引的key版本链中添加一个版本
+func (db *DB) VersionPut(key []byte, rev mvcc.Revision) {
+	db.versionIndex.Put(key, rev)
+}
+
+//VersionGet 根据key获得对应的版本链信息
+func (db *DB) VersionGet(key []byte) (*mvcc.Revision, error) {
+	return db.versionIndex.Get(key, db.latestRevison)
+}
+
+//VersionDelete 在当前的版本链表中删除一个版本
+func (db *DB) VersionDelete(key []byte, revision mvcc.Revision) {
+	db.versionIndex.Tombstone(key, revision)
 }
