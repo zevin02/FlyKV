@@ -13,10 +13,10 @@ func TestPut(t *testing.T) {
 
 	assert.Equal(t, Revision{4, 0}, ki.modified)
 	assert.Equal(t, 3, len(ki.generations[0].revs))
-	ki.Tombstone(5)
+	ki.Tombstone(5, 12)
 	// 删除当前的generation,并且生成一个最新的generation，供下一次操作
 	assert.Equal(t, 2, len(ki.generations))
-	assert.Equal(t, Revision{5, 0}, ki.modified)
+	assert.Equal(t, Revision{5, 12}, ki.modified)
 
 }
 
@@ -25,7 +25,7 @@ func TestGet(t *testing.T) {
 	ki.put(2, 0)
 	ki.put(3, 0)
 	ki.put(4, 0)
-	ki.Tombstone(5)
+	ki.Tombstone(5, 13)
 	// 删除当前的generation,并且生成一个最新的generation，供下一次操作
 	assert.Equal(t, 2, len(ki.generations))
 
@@ -43,7 +43,7 @@ func TestGet(t *testing.T) {
 	rev = ki.get(9)
 	assert.Equal(t, Revision{7, 0}, *rev)
 	ki.put(8, 0)
-	ki.Tombstone(9)
+	ki.Tombstone(9, 13)
 	rev = ki.get(9)
 
 }
@@ -60,7 +60,7 @@ func TestTreeIndex1(t *testing.T) {
 	ti.Put([]byte("foo"), Revision{4, 0})
 	rev, err = ti.Get([]byte("foo"), 3)
 	assert.Nil(t, err)
-	err = ti.Tombstone([]byte("foo"), Revision{5, 0})
+	_, err = ti.Tombstone([]byte("foo"), Revision{5, 0})
 	assert.Nil(t, err)
 	ti.Put([]byte("foo"), Revision{6, 0})
 	ti.Put([]byte("foo"), Revision{7, 0})

@@ -74,7 +74,7 @@ func (KI *KeyIndex) put(main, sub int64) {
 }
 
 //Tombstone 给当前插入一个revision
-func (KI *KeyIndex) Tombstone(main int64) (*Revision, error) {
+func (KI *KeyIndex) Tombstone(main, sub int64) (*Revision, error) {
 	rev := KI.get(main)
 	//当前的keyIndex中没有符合条件的revision，就返回没有找到
 	if rev == nil {
@@ -82,7 +82,7 @@ func (KI *KeyIndex) Tombstone(main int64) (*Revision, error) {
 	}
 
 	//在当前的keyindex中插入一个tombstone，再新创建一个generation
-	KI.put(main, 0) //给当前的generation中插入一个tombstone
+	KI.put(main, sub) //给当前的generation中插入一个tombstone
 	KI.generations = append(KI.generations, generation{})
 	return rev, nil
 }

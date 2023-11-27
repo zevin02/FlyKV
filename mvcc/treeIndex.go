@@ -52,7 +52,7 @@ func (ti *TreeIndex) Tombstone(key []byte, rev Revision) (*Revision, error) {
 	if ki == nil {
 		return nil, ErrRevisionNotFound
 	}
-	oldRev, err := ki.Tombstone(rev.Main) //在当前的keyIndex中进行删除
+	oldRev, err := ki.Tombstone(rev.Main, rev.Sub) //在当前的keyIndex中进行删除
 	if err != nil {
 		return nil, err
 	}
