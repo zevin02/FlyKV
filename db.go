@@ -186,6 +186,39 @@ func (db *DB) Put(key []byte, value []byte) error {
 //TODO 可以实现一个读缓存来存储一些数据，避免每次直接进行磁盘IO，可以考虑使用LRU（用到节点中里面的timestamp和内存索引的timestamp比较，看是否返回），同时也可以考虑使用布隆过滤器来过滤没找到的key，就不需要要取查找
 func (db *DB) Get(key []byte) ([]byte, error) {
 	//打开读锁
+
+	//if len(key) == 0 {
+	//	return nil, ErrKeyIsEmpty
+	//}
+	//
+	////在这里使用revisionIndex，在版本链中查找到指定的revision信息
+	//rev, err := db.VersionGet(key,db.latestRevison)
+	//if rev == nil || err != nil {
+	//	//当前的versionIndex中
+	//	return nil, ErrKeyNotFound
+	//}
+	//key = append(key, rev.Encode()...)
+	////更新当前的版本号
+	//db.latestRevison++
+	//
+	////从内存中拿出索引位置信息
+	//node, err := db.hashRing.Get(string(key)) //获得对应实例
+	//if err != nil {
+	//	return nil, err
+	//}
+	//logRecordPos := db.index[node].Get(key)
+	//if logRecordPos == nil {
+	//	return nil, ErrKeyNotFound
+	//}
+	////从数据文件中获取value
+	//return db.getValueByPos(logRecordPos)
+	val, err := db.GetVal(key, db.latestRevison)
+	db.latestRevison++
+	return val, err
+
+}
+
+func (db *DB) GetVal(key []byte, atRev int64) ([]byte, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	if len(key) == 0 {
@@ -193,7 +226,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	}
 
 	//在这里使用revisionIndex，在版本链中查找到指定的revision信息
-	rev, err := db.VersionGet(key)
+	rev, err := db.VersionGet(key, atRev)
 	if rev == nil || err != nil {
 		//当前的versionIndex中
 		return nil, ErrKeyNotFound
@@ -213,7 +246,6 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	}
 	//从数据文件中获取value
 	return db.getValueByPos(logRecordPos)
-
 }
 
 //getValueByPos 根据位置信息获取value
@@ -770,8 +802,8 @@ func (db *DB) VersionPut(key []byte, rev mvcc.Revision) {
 }
 
 //VersionGet 根据key获得对应的版本链信息
-func (db *DB) VersionGet(key []byte) (*mvcc.Revision, error) {
-	return db.versionIndex.Get(key, db.latestRevison)
+func (db *DB) VersionGet(key []byte, rev int64) (*mvcc.Revision, error) {
+	return db.versionIndex.Get(key, rev)
 }
 
 //VersionDelete 在当前的版本链表中删除一个版本

@@ -54,13 +54,24 @@ func (wb *WriteBatch) Put(key []byte, value []byte, nextSub int64) error {
 	rev := mvcc.Revision{Main: wb.beginRev, Sub: nextSub}
 	//key = append(key, rev.Encode()...) //当前的key追加上这个序列化之后的版本号信息
 	//在底层日志存储的,key也包含当前的版本号信息
+	//当前的logRecord中就存储了当前事务中的一个kv结构
 	logRecord := &data.LogRecord{Key: key, Value: value, Type: data.LogRecordNormal}
 
 	//记录当前的版本号
 	rv := &RecordWithVersion{logRecord: logRecord, rev: rev}
 
+	//当前的key是最初没有编码之后的key，同时在后期对同样的key写的时候，就
 	wb.pendingWrite[string(key)] = rv
 	return nil
+}
+
+//Get 如果当前的key在此次事务中使用到了，就可以直接在当前的writeBatch中提取使用
+func (wb *WriteBatch) Get(key []byte) ([]byte, bool) {
+	rv, ok := wb.pendingWrite[string(key)]
+	if ok {
+		return rv.logRecord.Value, true
+	}
+	return nil, false
 }
 
 //Delete 删除数据
@@ -73,7 +84,7 @@ func (wb *WriteBatch) Delete(key []byte, nextSub int64) error {
 	//当前的key
 	rev := mvcc.Revision{Main: wb.beginRev, Sub: nextSub}
 	//先得到最接近的key
-	oldRev, err := wb.db.VersionGet(key)
+	oldRev, err := wb.db.VersionGet(key, wb.beginRev)
 	if err != nil {
 		return err
 	}
