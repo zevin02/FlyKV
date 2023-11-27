@@ -44,18 +44,18 @@ func (ti *TreeIndex) Put(key []byte, rev Revision) {
 	ti.tree.Put(key, ki)
 }
 
-//Tombstone 给当前添加一个墓碑值
-func (ti *TreeIndex) Tombstone(key []byte, rev Revision) error {
+//Tombstone 给当前添加一个墓碑值,同时返回距离最近的一个版本号
+func (ti *TreeIndex) Tombstone(key []byte, rev Revision) (*Revision, error) {
 	ti.lock.Lock()
 	defer ti.lock.Unlock()
 	ki := ti.tree.Get(key)
 	if ki == nil {
-		return ErrRevisionNotFound
+		return nil, ErrRevisionNotFound
 	}
-	err := ki.Tombstone(rev.Main) //在当前的keyIndex中进行删除
+	oldRev, err := ki.Tombstone(rev.Main) //在当前的keyIndex中进行删除
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ti.tree.Put(key, ki)
-	return nil
+	return oldRev, nil
 }

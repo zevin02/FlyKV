@@ -459,7 +459,7 @@ func TestDB_Delete(t *testing.T) {
 
 	//2.删除一个不存在的key
 	_, err = db.Delete([]byte("unknow key"))
-	assert.Nil(t, err)
+	assert.NotNil(t, err)
 
 	//3.删除一个空的key
 	_, err = db.Delete(nil)

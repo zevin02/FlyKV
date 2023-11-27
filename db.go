@@ -156,7 +156,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 
 	db.latestRevison++
 	revEncoded := rev.Encode()
-	//将当前的版本版本链信息添加到keyIndex中进行管理
+	//将当前将当前的版本版本链信息添加到keyIndex中进行管理
 	db.VersionPut(key, rev)
 	key = append(key, revEncoded...) //当前的key追加上这个序列化之后的版本号信息
 
@@ -279,10 +279,13 @@ func (db *DB) Delete(key []byte) (bool, error) {
 		return false, ErrKeyIsEmpty
 	}
 	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
-	db.VersionDelete(key, rev)
+	oldRev, err := db.VersionDelete(key, rev) //先查找当前的最近的一个版本号
+	if err != nil {
+		return false, err
+	}
 	db.latestRevison++
-	revEncoded := rev.Encode()
-	key = append(key, revEncoded...) //当前的key追加上这个序列化之后的版本号信息
+	oldRevEncoded := oldRev.Encode()
+	key = append(key, oldRevEncoded...) //当前的key追加上这个序列化之后的版本号信息
 
 	//在内存索引中查找这个key是否存在,避免用户一致调用delete方法去删除一个不存在的key，导致磁盘文件膨胀
 	node, err := db.hashRing.Get(string(key)) //获得对应实例
@@ -772,6 +775,6 @@ func (db *DB) VersionGet(key []byte) (*mvcc.Revision, error) {
 }
 
 //VersionDelete 在当前的版本链表中删除一个版本
-func (db *DB) VersionDelete(key []byte, revision mvcc.Revision) {
-	db.versionIndex.Tombstone(key, revision)
+func (db *DB) VersionDelete(key []byte, revision mvcc.Revision) (*mvcc.Revision, error) {
+	return db.versionIndex.Tombstone(key, revision)
 }
