@@ -87,6 +87,27 @@ func (KI *KeyIndex) Tombstone(main, sub int64) (*Revision, error) {
 	return rev, nil
 }
 
+////compact 给定一个当前的版本号，把无效的版本号进行归总，并返回
+//func (KI *KeyIndex) compact(atRev int64) []Revision {
+//
+//}
+
+//doCompact
+func (KI *KeyIndex) doCompact(atRev int64) (genIdx int, revIdx int) {
+	genIdx, g := 0, &KI.generations[0] //genIdx是从最老的代开始寻找
+
+	for genIdx < len(KI.generations)-1 {
+		//因为最后一个generation是一个活跃的genenration
+		if tomb := g.revs[len(g.revs)-1].Main; tomb < atRev {
+			break
+		}
+		genIdx++
+		g = &KI.generations[genIdx]
+	}
+	//TODO add code
+	return 0, 0
+}
+
 //IsEmpty 如果当前的generation是空的
 func (KI *KeyIndex) IsEmpty() bool {
 	return len(KI.generations) == 1 && KI.generations[0].IsEmpty()

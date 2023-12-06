@@ -5,12 +5,15 @@ import (
 	"time"
 )
 
+//const revInterval = 60 * time.Second
+
 //startBackgroundTask 执行一些后台需要执行的代码
 func (db *DB) startBackgroundTask() {
 	//创建一些定时触发的操作
 
 	flushTicker := time.NewTicker(time.Duration(db.options.TimeSync) * time.Second) //创建刷盘定时器
 	StatTicker := time.NewTicker(time.Duration(db.options.TimeGetStat) * time.Second)
+	//CompactTicker := time.NewTicker(time.Duration(revInterval) * time.Second) //定时5分钟进行对数据进行压缩
 	defer flushTicker.Stop()
 	for {
 		select {
@@ -21,6 +24,8 @@ func (db *DB) startBackgroundTask() {
 			}
 		case <-StatTicker.C:
 			db.Stat()
+		//case <-CompactTicker.C:
+		//当前的时间到了，就要进行压缩，采样一定的数量
 
 		case <-db.exitSignal:
 			//如果用户Close DB，就退出当前的goroutine

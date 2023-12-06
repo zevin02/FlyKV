@@ -28,7 +28,7 @@ func TestDB_WriteBatch1(t *testing.T) {
 	//正常提交数据后读取数据
 	err = wb.Commit()
 	assert.Nil(t, err)
-	db.latestRevison = wb.beginRev + 1
+	db.latestRevision = wb.beginRev + 1
 	val1, err := db.Get(utils.GetTestKey(1))
 	assert.NotNil(t, val1)
 	assert.Nil(t, err)
@@ -39,7 +39,7 @@ func TestDB_WriteBatch1(t *testing.T) {
 	assert.Nil(t, err)
 	err = wb1.Commit()
 	assert.Nil(t, err)
-	db.latestRevison = wb1.beginRev + 1
+	db.latestRevision = wb1.beginRev + 1
 	val2, err := db.Get(utils.GetTestKey(1)) //删除之后，就不能读取之前的的数据了
 	assert.Nil(t, val2)
 }
@@ -63,7 +63,7 @@ func TestDB_WriteBatch2(t *testing.T) {
 	assert.Nil(t, err)
 
 	err = wb.Commit()
-	db.latestRevison = wb.beginRev + 1
+	db.latestRevision = wb.beginRev + 1
 	assert.Nil(t, err)
 	err = wb.Put(utils.GetTestKey(11), utils.RandomValue(10), 2)
 	err = wb.Commit()

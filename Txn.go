@@ -1,5 +1,7 @@
 package FlexDB
 
+import "sync/atomic"
+
 //TXN 实现一个事务
 type TXN struct {
 	writeView *WriteBatch //批量的写
@@ -16,12 +18,13 @@ func (t *TXN) Put(key []byte, value []byte) error {
 
 func (db *DB) NewTXN(options WriteBatchOptions) *TXN {
 	txn := &TXN{
-		beginRev:  db.latestRevison, //当前事务启动时候的版本号
+		beginRev:  db.latestRevision, //当前事务启动时候的版本号
 		nextSub:   0,
-		writeView: db.NewWriteBatch(options, db.latestRevison),
+		writeView: db.NewWriteBatch(options, db.latestRevision),
 	}
 	//初始化完当前一个事务之后，db的latestRevison就会自增1
-	db.latestRevison++
+	atomic.AddInt64(&db.latestRevision, 1)
+
 	return txn
 }
 

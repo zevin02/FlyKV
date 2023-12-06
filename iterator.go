@@ -9,11 +9,16 @@ import (
 
 var maxHeap bool //用来判断用户的迭代器是希望正序还是倒序，由此创建小堆或者大堆
 
+/*
+	由于我们原来的索引有多个，所以我们现在需要对多个索引数据进行有序迭代，这里我们使用最小堆来实现，每次取出迭代器中的第一个元素加入到堆顶中，因为堆顶的成功最小的元素，所以我们可以保证每次取出的元素都是最小的元素，这样就可以实现多个索引的有序迭代
+
+*/
+
 // Iterator 供用户使用的迭代器
 type Iterator struct {
 	options    IteratorOptions
 	db         *DB
-	iters      ItemHeap //最小堆
+	iters      ItemHeap //最小堆，里面维护了多个索引的迭代器
 	indexIters map[string]index.Iterator
 }
 

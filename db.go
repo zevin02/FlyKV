@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -23,7 +24,6 @@ const (
 	fileFlockName = "fileFlcok"
 )
 
-//使用key找到他的keyindex
 //DB Bitcask存储引擎的实例
 type DB struct {
 	fileIds                []int   //文件ID，只能在加载索引的时候使用
@@ -42,8 +42,8 @@ type DB struct {
 	mergeInfo              MergeInfo                 //保存merge相关信息
 	exitSignal             chan struct{}             //退出信号的管道，用于控制Goroutine的退出
 	stat                   *Stat                     //记录某一个时刻的db的状态
-	latestRevison          int64                     //下一次进来需要使用的版本号,修改，之后使用seqNo
-	versionIndex           *mvcc.TreeIndex           //全局只能拥有一个TreeIndex，这个是内存级别的，所以在db启动的时候，就需要构造这个对象,我们可以使用WAL，把数据存储在WAL中
+	latestRevision         int64                     //下一次进来需要使用的版本号,每次事务都更新当前的版本号信息
+	versionIndex           *mvcc.TreeIndex           //全局只能拥有一个TreeIndex，这个是内存级别的，所以在db启动的时候，就需要构造这个对象,我们可以使用WAL，把数据存储在WAL中,
 }
 
 //Stat 可以记录某一个时刻的db状态
@@ -141,6 +141,8 @@ func Open(options Options) (*DB, error) {
 
 	//启动goroutine处理定时任务
 	go db.startBackgroundTask()
+
+	//在这个地方启动一个后台线程进行每5分钟定期清理一定量的数据，减轻压力，避免一次性清理过多的数据，导致服务中断
 	return db, nil
 }
 
@@ -150,11 +152,11 @@ func (db *DB) Put(key []byte, value []byte) error {
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
 	}
-	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
+	rev := mvcc.Revision{Main: db.latestRevision, Sub: 0}
 	//更新当前的版本号
 	//TODO db.latestRevision use atomic addition seqNo := atomic.AddUint64(&wb.db.seqNo, 1) //原子加1
-
-	db.latestRevison++
+	atomic.AddInt64(&db.latestRevision, 1)
+	//db.latestRevision++
 	revEncoded := rev.Encode()
 	//将当前将当前的版本版本链信息添加到keyIndex中进行管理
 	db.VersionPut(key, rev)
@@ -185,39 +187,12 @@ func (db *DB) Put(key []byte, value []byte) error {
 //Get 根据Key读取数据,根据当前的revision信息进行处理
 //TODO 可以实现一个读缓存来存储一些数据，避免每次直接进行磁盘IO，可以考虑使用LRU（用到节点中里面的timestamp和内存索引的timestamp比较，看是否返回），同时也可以考虑使用布隆过滤器来过滤没找到的key，就不需要要取查找
 func (db *DB) Get(key []byte) ([]byte, error) {
-	//打开读锁
-
-	//if len(key) == 0 {
-	//	return nil, ErrKeyIsEmpty
-	//}
-	//
-	////在这里使用revisionIndex，在版本链中查找到指定的revision信息
-	//rev, err := db.VersionGet(key,db.latestRevison)
-	//if rev == nil || err != nil {
-	//	//当前的versionIndex中
-	//	return nil, ErrKeyNotFound
-	//}
-	//key = append(key, rev.Encode()...)
-	////更新当前的版本号
-	//db.latestRevison++
-	//
-	////从内存中拿出索引位置信息
-	//node, err := db.hashRing.Get(string(key)) //获得对应实例
-	//if err != nil {
-	//	return nil, err
-	//}
-	//logRecordPos := db.index[node].Get(key)
-	//if logRecordPos == nil {
-	//	return nil, ErrKeyNotFound
-	//}
-	////从数据文件中获取value
-	//return db.getValueByPos(logRecordPos)
-	val, err := db.GetVal(key, db.latestRevison)
-	db.latestRevison++
+	val, err := db.GetVal(key, db.latestRevision)
+	db.latestRevision++
 	return val, err
-
 }
 
+//GetVal 根据给定的版本号，寻找合适符合条件的数据
 func (db *DB) GetVal(key []byte, atRev int64) ([]byte, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -233,7 +208,6 @@ func (db *DB) GetVal(key []byte, atRev int64) ([]byte, error) {
 	}
 	key = append(key, rev.Encode()...)
 	//更新当前的版本号
-	db.latestRevison++
 
 	//从内存中拿出索引位置信息
 	node, err := db.hashRing.Get(string(key)) //获得对应实例
@@ -310,12 +284,13 @@ func (db *DB) Delete(key []byte) (bool, error) {
 	if len(key) == 0 {
 		return false, ErrKeyIsEmpty
 	}
-	rev := mvcc.Revision{Main: db.latestRevison, Sub: 0}
+	rev := mvcc.Revision{Main: db.latestRevision, Sub: 0}
 	oldRev, err := db.VersionDelete(key, rev) //先查找当前的最近的一个版本号
 	if err != nil {
 		return false, err
 	}
-	db.latestRevison++
+	atomic.AddInt64(&db.latestRevision, 1)
+
 	oldRevEncoded := oldRev.Encode()
 	key = append(key, oldRevEncoded...) //当前的key追加上这个序列化之后的版本号信息
 

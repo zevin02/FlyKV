@@ -59,3 +59,8 @@ func (ti *TreeIndex) Tombstone(key []byte, rev Revision) (*Revision, error) {
 	ti.tree.Put(key, ki)
 	return oldRev, nil
 }
+
+////
+//func (ti *TreeIndex) Compact(atRev int64) []Revision {
+//	//
+//}
