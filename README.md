@@ -13,13 +13,17 @@ FlexDB对速度和简单性的关注使其成为在平衡存储成本的同时�
 - 支持多种内存索引结构，包括跳表、ARTree、B+树和B树。
 - 崩溃恢复快，通过CRC校验确保数据的一致性。
 - 支持MVCC的多版本控制，同时支持快照读取。
-- 参考LevelDB的WAL格式，将数据文件进行按Block组织，并实现LRU来管理缓存，提供缓存命中率
-- 通过goroutine定期对内存索引和treeIndex中的过期版本进行compact删除
-- 使用Bloom Filter降低查询开销
-- 实现WriteBatch 支持数据的批处理，保证操作的原子性
-- 使用mmap在启动阶段加速读取磁盘文件构建索引，并利用merge阶段生成的hint文件加速内存索引的构建，提高启动的速度
-- 支持Redis的部分数据结构和协议，兼容redis的客户端
+- 参考LevelDB的WAL格式，将数据文件进行按Block组织，并实现LRU来管理缓存，提供缓存命中率。
+- 通过goroutine定期对内存索引和treeIndex中的过期版本进行compact删除。
+- 使用Bloom Filter降低查询开销。
+- 实现WriteBatch 支持数据的批处理，保证操作的原子性。
+- 使用mmap在启动阶段加速读取磁盘文件构建索引，并利用merge阶段生成的hint文件加速内存索引的构建，提高启动的速度。
+- 支持Redis的部分数据结构和协议，兼容redis的客户端。
 
+
+# 架构
+
+![](https://i.imgur.com/vASDlNt.png)
 
 
 # 如何使用FlexDB
