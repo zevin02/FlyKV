@@ -22,8 +22,14 @@ FlexDB对速度和简单性的关注使其成为在平衡存储成本的同时�
 
 
 # 架构
-
+FlexDB的结构图
 ![](https://i.imgur.com/vASDlNt.png)
+
+FlexDB中的WAL的设计
+![](https://i.imgur.com/6wijEY8.png)
+
+FlexDB的mvcc的设计
+![](https://i.imgur.com/3kYNF4q.png)
 
 
 # 如何使用FlexDB
